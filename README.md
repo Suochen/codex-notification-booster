@@ -2,6 +2,14 @@
 
 A Windows 11 helper for making Codex completion notifications easier to hear without raising all Codex app audio.
 
+## Workflow
+
+This repo is governed by the standalone Matt AI Workflow pack at `Suochen/matt-ai-workflow`.
+
+Current development state: product discovery. Do not implement product behavior until Requirement Analysis, `grill-me`, PRD approval, and issue publication gates have completed.
+
+Runtime boundary: the helper must run directly on Windows 11. WSL is only an editing and repository-management environment.
+
 ## Windows notification metadata probe
 
 The first-stage probe is a Windows PowerShell script for discovering what metadata Windows exposes for visible toast notifications. It is read-only: it does not play sounds, change volume, dismiss notifications, clear notifications, move notifications, reply to notifications, or change notification state.

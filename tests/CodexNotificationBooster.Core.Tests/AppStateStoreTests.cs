@@ -25,7 +25,11 @@ public sealed class AppStateStoreTests : IDisposable
         var expected = new AppState
         {
             IsEnabled = false,
-            IsAudioDuckingEnabled = false
+            IsAudioDuckingEnabled = false,
+            AudioDucking = new AudioDuckingState(
+                new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 5, 28, 10, 0, 1, TimeSpan.Zero),
+                [new AudioDuckingSnapshot("session-1", 0.42f, "music", "Music")])
         };
 
         store.Save(expected);
@@ -34,6 +38,10 @@ public sealed class AppStateStoreTests : IDisposable
 
         Assert.False(actual.IsEnabled);
         Assert.False(actual.IsAudioDuckingEnabled);
+        Assert.NotNull(actual.AudioDucking);
+        var snapshot = Assert.Single(actual.AudioDucking!.Snapshots);
+        Assert.Equal("session-1", snapshot.SessionId);
+        Assert.Equal(0.42f, snapshot.OriginalVolume);
         Assert.True(File.Exists(paths.StateFilePath));
     }
 

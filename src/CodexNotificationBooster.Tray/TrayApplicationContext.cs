@@ -12,8 +12,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly AppStateStore _stateStore;
     private readonly HelperSoundAssetProvider _soundAssetProvider;
     private readonly RedactingFileLogger _logger;
+    private readonly AudioDuckingCoordinator _audioDuckingCoordinator;
     private readonly NotificationListenerService _notificationListenerService;
     private readonly System.Windows.Forms.Timer _pollTimer;
+    private readonly System.Windows.Forms.Timer _duckingTimer;
     private readonly CancellationTokenSource _shutdownTokenSource = new();
     private readonly NotifyIcon _notifyIcon;
     private readonly ToolStripMenuItem _enabledMenuItem;
@@ -32,9 +34,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _soundAssetProvider = new HelperSoundAssetProvider(_paths);
         _logger = new RedactingFileLogger(_paths);
         _state = _stateStore.Load();
+        _audioDuckingCoordinator = new AudioDuckingCoordinator(
+            new WindowsAudioSessionVolumeController(),
+            () => _state,
+            SaveState,
+            Process.GetCurrentProcess().Id,
+            HandleAudioDuckingEvent);
         _notificationListenerService = new NotificationListenerService(
             new WindowsNotificationSource(_logger),
-            new HelperSoundPlayback(_soundAssetProvider),
+            new AudioDuckingNotificationPlayback(
+                new HelperSoundPlayback(_soundAssetProvider),
+                _audioDuckingCoordinator),
             new VisibleNotificationProcessor(),
             _logger,
             () => _state.IsEnabled,
@@ -82,6 +92,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
         _pollTimer.Tick += async (_, _) => await PollNotificationsAsync();
         _pollTimer.Start();
+
+        _duckingTimer = new System.Windows.Forms.Timer
+        {
+            Interval = 250
+        };
+        _duckingTimer.Tick += (_, _) => _audioDuckingCoordinator.RestoreIfDue();
+        _duckingTimer.Start();
+
+        _audioDuckingCoordinator.RecoverPriorState();
         _ = PollNotificationsAsync();
     }
 
@@ -95,7 +114,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void ToggleAudioDucking()
     {
         _state = _state with { IsAudioDuckingEnabled = !_state.IsAudioDuckingEnabled };
-        PersistState("state-audio-ducking-toggled", $"Audio ducking placeholder state changed to {_state.IsAudioDuckingEnabled}.");
+        PersistState("state-audio-ducking-toggled", $"Audio ducking state changed to {_state.IsAudioDuckingEnabled}.");
+        if (!_state.IsAudioDuckingEnabled)
+        {
+            _audioDuckingCoordinator.RestoreNow();
+        }
+
         RefreshMenuLabels();
     }
 
@@ -112,8 +136,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void RestoreVolume()
     {
-        _logger.Log(LogLevel.Info, "restore-volume-placeholder", "Restore volume placeholder invoked before audio ducking implementation.");
-        ShowStatusBalloon("Codex Notification Booster", "恢复音量功能将在后续音频闪避实现中接入。");
+        _audioDuckingCoordinator.RestoreNow();
+        _logger.Log(LogLevel.Info, "restore-volume-menu", "Restore volume menu action invoked.");
+        ShowStatusBalloon("Codex Notification Booster", "已尝试恢复音量。");
     }
 
     private void OpenLogsDirectory()
@@ -134,9 +159,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         RunMenuAction("tray-exit", () =>
         {
             _logger.Log(LogLevel.Info, "tray-exit", "Tray helper exiting normally.");
+            _audioDuckingCoordinator.RestoreNow();
             _shutdownTokenSource.Cancel();
             _pollTimer.Stop();
+            _duckingTimer.Stop();
             _pollTimer.Dispose();
+            _duckingTimer.Dispose();
             _shutdownTokenSource.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
@@ -152,6 +180,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ["isEnabled"] = _state.IsEnabled,
             ["isAudioDuckingEnabled"] = _state.IsAudioDuckingEnabled
         });
+    }
+
+    private void SaveState(AppState state)
+    {
+        _state = state;
+        _stateStore.Save(_state);
+    }
+
+    private void HandleAudioDuckingEvent(AudioDuckingEvent item)
+    {
+        _logger.Log(item.Level, item.Code, item.Message, item.Metadata);
+        if (item.UserVisible && !string.IsNullOrWhiteSpace(item.UserMessage))
+        {
+            PostToUi(() => ShowStatusBalloon("Codex Notification Booster", item.UserMessage));
+        }
     }
 
     private void RefreshMenuLabels()

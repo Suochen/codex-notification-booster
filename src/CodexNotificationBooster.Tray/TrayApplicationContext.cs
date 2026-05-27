@@ -12,6 +12,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly AppStateStore _stateStore;
     private readonly HelperSoundAssetProvider _soundAssetProvider;
     private readonly RedactingFileLogger _logger;
+    private readonly NotificationListenerService _notificationListenerService;
+    private readonly System.Windows.Forms.Timer _pollTimer;
+    private readonly CancellationTokenSource _shutdownTokenSource = new();
     private readonly NotifyIcon _notifyIcon;
     private readonly ToolStripMenuItem _enabledMenuItem;
     private readonly ToolStripMenuItem _audioDuckingMenuItem;
@@ -21,6 +24,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _exitMenuItem;
 
     private AppState _state;
+    private bool _isPolling;
 
     public TrayApplicationContext()
     {
@@ -28,6 +32,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _soundAssetProvider = new HelperSoundAssetProvider(_paths);
         _logger = new RedactingFileLogger(_paths);
         _state = _stateStore.Load();
+        _notificationListenerService = new NotificationListenerService(
+            new WindowsNotificationSource(_logger),
+            new HelperSoundPlayback(_soundAssetProvider),
+            new VisibleNotificationProcessor(),
+            _logger,
+            () => _state.IsEnabled,
+            (title, message) => PostToUi(() => ShowStatusBalloon(title, message)));
 
         _paths.EnsureDirectories();
         _soundAssetProvider.EnsurePresent();
@@ -64,6 +75,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.DoubleClick += (_, _) => ShowStatusBalloon("Codex Notification Booster", "托盘助手正在运行。");
 
         RefreshMenuLabels();
+
+        _pollTimer = new System.Windows.Forms.Timer
+        {
+            Interval = 2000
+        };
+        _pollTimer.Tick += async (_, _) => await PollNotificationsAsync();
+        _pollTimer.Start();
+        _ = PollNotificationsAsync();
     }
 
     private void ToggleEnabled()
@@ -115,6 +134,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         RunMenuAction("tray-exit", () =>
         {
             _logger.Log(LogLevel.Info, "tray-exit", "Tray helper exiting normally.");
+            _shutdownTokenSource.Cancel();
+            _pollTimer.Stop();
+            _pollTimer.Dispose();
+            _shutdownTokenSource.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             ExitThread();
@@ -162,6 +185,38 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
             ShowStatusBalloon("Codex Notification Booster", $"操作失败：{ex.Message}");
         }
+    }
+
+    private async Task PollNotificationsAsync()
+    {
+        if (_isPolling || _shutdownTokenSource.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _isPolling = true;
+        try
+        {
+            await _notificationListenerService.PollOnceAsync(_shutdownTokenSource.Token);
+        }
+        catch (OperationCanceledException) when (_shutdownTokenSource.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _isPolling = false;
+        }
+    }
+
+    private void PostToUi(Action action)
+    {
+        if (_notifyIcon.ContextMenuStrip is { IsDisposed: false } menu && menu.InvokeRequired)
+        {
+            menu.BeginInvoke(action);
+            return;
+        }
+
+        action();
     }
 
     private void ShowStatusBalloon(string title, string message)

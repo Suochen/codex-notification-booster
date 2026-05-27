@@ -113,28 +113,38 @@ $playbackCalls = New-Object System.Collections.Generic.List[string]
 try {
     New-MinimalWavFile -Path $wavPath
 
-    $codexRecord = Copy-RecordWithVolatileNotificationFields `
+    $startupBaselineCodexRecord = Copy-RecordWithVolatileNotificationFields `
         -Record (Read-Fixture -Name 'codex-general.json') `
         -NotificationId 'volatile-live-id-1' `
         -CreationTime '2026-05-27T00:00:01.0000000Z' `
         -RawXmlSha256 'volatile-live-xml-hash-1'
-    $repeatedCodexRecord = Copy-RecordWithVolatileNotificationFields `
+    $startupBaselineRepeatedCodexRecord = Copy-RecordWithVolatileNotificationFields `
         -Record (Read-Fixture -Name 'codex-general.json') `
         -NotificationId 'volatile-live-id-2' `
         -CreationTime '2026-05-27T00:00:02.0000000Z' `
         -RawXmlSha256 'volatile-live-xml-hash-2'
-    $codexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
-        -Record (Read-Fixture -Name 'codex-general.json') `
+    $postStartCodexRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-no-completion-text.json') `
         -NotificationId 'volatile-live-id-4' `
         -CreationTime '2026-05-27T00:00:04.0000000Z' `
         -RawXmlSha256 'volatile-live-xml-hash-4'
-    $repeatedCodexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
-        -Record (Read-Fixture -Name 'codex-general.json') `
+    $postStartCodexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-no-completion-text.json') `
         -NotificationId 'volatile-live-id-5' `
         -CreationTime '2026-05-27T00:00:05.0000000Z' `
         -RawXmlSha256 'volatile-live-xml-hash-5'
+    $repeatedPostStartCodexRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-no-completion-text.json') `
+        -NotificationId 'volatile-live-id-6' `
+        -CreationTime '2026-05-27T00:00:06.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-6'
+    $repeatedPostStartCodexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-no-completion-text.json') `
+        -NotificationId 'volatile-live-id-7' `
+        -CreationTime '2026-05-27T00:00:07.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-7'
     $reappearedCodexRecord = Copy-RecordWithVolatileNotificationFields `
-        -Record (Read-Fixture -Name 'codex-general.json') `
+        -Record (Read-Fixture -Name 'codex-no-completion-text.json') `
         -NotificationId 'volatile-live-id-3' `
         -CreationTime '2026-05-27T00:00:03.0000000Z' `
         -RawXmlSha256 'volatile-live-xml-hash-3'
@@ -142,8 +152,9 @@ try {
     $nonCodexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'edge-dedup-1' -Force
 
     $polls = @(
-        @($codexRecord, $codexSiblingRecord, $nonCodexRecord),
-        @($repeatedCodexRecord, $repeatedCodexSiblingRecord),
+        @($startupBaselineCodexRecord, $startupBaselineRepeatedCodexRecord, $nonCodexRecord),
+        @($startupBaselineCodexRecord, $startupBaselineRepeatedCodexRecord, $postStartCodexRecord, $postStartCodexSiblingRecord),
+        @($repeatedPostStartCodexRecord, $repeatedPostStartCodexSiblingRecord),
         @(),
         @($reappearedCodexRecord)
     )
@@ -171,7 +182,7 @@ try {
         -Config @{ soundPath = $wavPath } `
         -LogPath $logPath `
         -PollSeconds 1 `
-        -MaxPolls 4
+        -MaxPolls 5
 
     if ($summary.playbackRequests -ne 3) {
         throw "Expected three playback requests, got $($summary.playbackRequests)."
@@ -179,11 +190,11 @@ try {
     if ($playbackCalls.Count -ne 3) {
         throw "Expected three fake playback calls, got $($playbackCalls.Count)."
     }
-    if ($summary.duplicatesSkipped -ne 2) {
-        throw "Expected two duplicate skips, got $($summary.duplicatesSkipped)."
+    if ($summary.duplicatesSkipped -ne 4) {
+        throw "Expected four duplicate skips, got $($summary.duplicatesSkipped)."
     }
-    if ($summary.ignored -ne 1) {
-        throw "Expected one ignored non-Codex notification, got $($summary.ignored)."
+    if ($summary.ignored -ne 0) {
+        throw "Expected zero ignored notifications because the non-Codex startup record should be baselined, got $($summary.ignored)."
     }
 
     $records = @(Get-JsonlRecords -Path $logPath)
@@ -191,13 +202,15 @@ try {
         'helper-started',
         'log-path-ready',
         'config-valid',
-        'ignored-notification',
+        'startup-baseline-notification-skipped',
         'helper-stopped'
     )) {
         Assert-EventCode -Records $records -Code $code
     }
+    Assert-EventCodeCount -Records $records -Code 'startup-baseline-notification-skipped' -ExpectedCount 3
     Assert-EventCodeCount -Records $records -Code 'matched-playback-requested' -ExpectedCount 3
-    Assert-EventCodeCount -Records $records -Code 'duplicate-notification-skipped' -ExpectedCount 2
+    Assert-EventCodeCount -Records $records -Code 'duplicate-notification-skipped' -ExpectedCount 4
+    Assert-EventCodeCount -Records $records -Code 'ignored-notification' -ExpectedCount 0
 
     $diagnosticJson = Get-Content -LiteralPath $logPath -Raw
     foreach ($forbidden in @('"body"', '"rawXml"', '"textLines"', '"title"')) {
@@ -209,8 +222,19 @@ try {
     $failureLogPath = Join-Path -Path $tempRoot -ChildPath 'helper-failure-diagnostics.jsonl'
     $failingCodexRecord = Read-Fixture -Name 'codex-general.json'
     $failingCodexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'codex-dedup-failure' -Force
+    $failingProviderState = [pscustomobject]@{
+        pollIndex = 0
+    }
     $failingProvider = {
-        return @($failingCodexRecord)
+        $result = if ($failingProviderState.pollIndex -eq 0) {
+            @()
+        }
+        else {
+            @($failingCodexRecord)
+        }
+
+        $failingProviderState.pollIndex += 1
+        return $result
     }.GetNewClosure()
     $failingPlayback = {
         param([string]$SoundPath)
@@ -223,7 +247,7 @@ try {
         -Config @{ soundPath = $wavPath } `
         -LogPath $failureLogPath `
         -PollSeconds 1 `
-        -MaxPolls 1
+        -MaxPolls 2
 
     if ($failureSummary.playbackRequests -ne 1) {
         throw "Expected failing playback to count one playback request, got $($failureSummary.playbackRequests)."

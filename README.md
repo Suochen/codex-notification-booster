@@ -76,3 +76,24 @@ Windows notification listener APIs:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-matcher.ps1
 ```
+
+The first playback-slice check also uses redacted/minimal fixtures and a fake
+playback implementation. It proves Codex metadata requests helper-owned
+playback, QQ/TopNotify/Edge metadata is ignored, and config/playback failures
+return diagnostics without notification listener APIs or volume changes:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-playback.ps1
+```
+
+To manually verify real helper-owned playback on Windows 11, pass a local `.wav`
+file to the isolated playback adapter:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\play-notification-sound.ps1 -SoundPath "C:\path\to\custom.wav"
+```
+
+The playback adapter only plays the configured local `.wav` file from the helper
+process. It does not read notifications, suppress the original notification
+sound, change Codex app mixer volume, change global Windows volume, change
+Windows notification volume, or change other application audio.

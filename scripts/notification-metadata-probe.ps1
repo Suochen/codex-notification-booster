@@ -457,10 +457,12 @@ function Invoke-SelfTest {
     }
 }
 
-if ($SelfTest) {
-    Invoke-SelfTest
-    return
-}
+if ($MyInvocation.InvocationName -ne '.') {
+    if ($SelfTest) {
+        Invoke-SelfTest
+        return
+    }
 
-$resolvedLogPath = Resolve-ProbeLogPath -ConfiguredPath $LogPath
-Capture-Notifications -OutputPath $resolvedLogPath -SinglePass:$Once -Duration $DurationMinutes -Interval $PollSeconds
+    $resolvedLogPath = Resolve-ProbeLogPath -ConfiguredPath $LogPath
+    Capture-Notifications -OutputPath $resolvedLogPath -SinglePass:$Once -Duration $DurationMinutes -Interval $PollSeconds
+}

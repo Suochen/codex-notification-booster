@@ -1,0 +1,179 @@
+[CmdletBinding()]
+param()
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$helperPath = Join-Path -Path $PSScriptRoot -ChildPath 'notification-helper-loop.ps1'
+$adapterPath = Join-Path -Path $PSScriptRoot -ChildPath 'play-notification-sound.ps1'
+$fixtureRoot = Join-Path -Path $repoRoot -ChildPath 'tests\fixtures\notification-metadata'
+
+foreach ($scriptPath in @($helperPath, $adapterPath)) {
+    if (-not (Test-Path -LiteralPath $scriptPath)) {
+        throw "Required script not found: $scriptPath"
+    }
+
+    $tokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        $parseErrors | Format-List *
+        throw "PowerShell parser found $($parseErrors.Count) error(s) in $scriptPath."
+    }
+}
+
+. $helperPath
+
+function Read-Fixture {
+    param([string]$Name)
+
+    $path = Join-Path -Path $fixtureRoot -ChildPath $Name
+    Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+}
+
+function New-MinimalWavFile {
+    param([string]$Path)
+
+    $directory = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+
+    $bytes = [byte[]]@(
+        0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00,
+        0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20,
+        0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+        0x40, 0x1f, 0x00, 0x00, 0x80, 0x3e, 0x00, 0x00,
+        0x02, 0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61,
+        0x00, 0x00, 0x00, 0x00
+    )
+    [System.IO.File]::WriteAllBytes($Path, $bytes)
+}
+
+function Get-JsonlRecords {
+    param([string]$Path)
+
+    Get-Content -LiteralPath $Path | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    } | ForEach-Object {
+        $_ | ConvertFrom-Json
+    }
+}
+
+function Assert-EventCode {
+    param(
+        $Records,
+        [string]$Code
+    )
+
+    if (-not @($Records | Where-Object { $_.code -eq $Code })) {
+        throw "Expected diagnostic event code '$Code'."
+    }
+}
+
+$tempRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('codex-notification-booster-helper-loop-check-' + [guid]::NewGuid().ToString('n'))
+$wavPath = Join-Path -Path $tempRoot -ChildPath 'custom.wav'
+$logPath = Join-Path -Path $tempRoot -ChildPath 'helper-diagnostics.jsonl'
+$playbackCalls = New-Object System.Collections.Generic.List[string]
+
+try {
+    New-MinimalWavFile -Path $wavPath
+
+    $codexRecord = Read-Fixture -Name 'codex-general.json'
+    $codexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'codex-dedup-1' -Force
+    $nonCodexRecord = Read-Fixture -Name 'edge.json'
+    $nonCodexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'edge-dedup-1' -Force
+
+    $polls = @(
+        @($codexRecord, $nonCodexRecord),
+        @($codexRecord)
+    )
+    $providerState = [pscustomobject]@{
+        pollIndex = 0
+    }
+    $fakeProvider = {
+        if ($providerState.pollIndex -ge $polls.Count) {
+            return @()
+        }
+
+        $result = $polls[$providerState.pollIndex]
+        $providerState.pollIndex += 1
+        return $result
+    }.GetNewClosure()
+
+    $fakePlayback = {
+        param([string]$SoundPath)
+        [void]$playbackCalls.Add($SoundPath)
+    }.GetNewClosure()
+
+    $summary = Invoke-NotificationHelperLoop `
+        -NotificationProvider $fakeProvider `
+        -PlaybackInvoker $fakePlayback `
+        -Config @{ soundPath = $wavPath } `
+        -LogPath $logPath `
+        -PollSeconds 1 `
+        -MaxPolls 2
+
+    if ($summary.playbackRequests -ne 1) {
+        throw "Expected one playback request, got $($summary.playbackRequests)."
+    }
+    if ($playbackCalls.Count -ne 1) {
+        throw "Expected one fake playback call, got $($playbackCalls.Count)."
+    }
+    if ($summary.duplicatesSkipped -ne 1) {
+        throw "Expected one duplicate skip, got $($summary.duplicatesSkipped)."
+    }
+    if ($summary.ignored -ne 1) {
+        throw "Expected one ignored non-Codex notification, got $($summary.ignored)."
+    }
+
+    $records = @(Get-JsonlRecords -Path $logPath)
+    foreach ($code in @(
+        'helper-started',
+        'log-path-ready',
+        'config-valid',
+        'matched-playback-requested',
+        'ignored-notification',
+        'duplicate-notification-skipped',
+        'helper-stopped'
+    )) {
+        Assert-EventCode -Records $records -Code $code
+    }
+
+    $diagnosticJson = Get-Content -LiteralPath $logPath -Raw
+    foreach ($forbidden in @('"body"', '"rawXml"', '"textLines"', '"title"')) {
+        if ($diagnosticJson -match [regex]::Escape($forbidden)) {
+            throw "Diagnostics should not include raw notification content field $forbidden by default."
+        }
+    }
+
+    $failureLogPath = Join-Path -Path $tempRoot -ChildPath 'helper-failure-diagnostics.jsonl'
+    $failingProvider = {
+        return @($codexRecord)
+    }.GetNewClosure()
+    $failingPlayback = {
+        param([string]$SoundPath)
+        throw "simulated playback failure for $SoundPath"
+    }
+
+    $failureSummary = Invoke-NotificationHelperLoop `
+        -NotificationProvider $failingProvider `
+        -PlaybackInvoker $failingPlayback `
+        -Config @{ soundPath = $wavPath } `
+        -LogPath $failureLogPath `
+        -PollSeconds 1 `
+        -MaxPolls 1
+
+    if ($failureSummary.playbackRequests -ne 1) {
+        throw "Expected failing playback to count one playback request, got $($failureSummary.playbackRequests)."
+    }
+
+    $failureRecords = @(Get-JsonlRecords -Path $failureLogPath)
+    Assert-EventCode -Records $failureRecords -Code 'playback-failure'
+}
+finally {
+    if (Test-Path -LiteralPath $tempRoot) {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "notification helper loop checks passed from $repoRoot"

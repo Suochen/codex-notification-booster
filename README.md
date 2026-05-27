@@ -97,3 +97,84 @@ The playback adapter only plays the configured local `.wav` file from the helper
 process. It does not read notifications, suppress the original notification
 sound, change Codex app mixer volume, change global Windows volume, change
 Windows notification volume, or change other application audio.
+
+## Foreground notification helper
+
+The first runnable helper slice is a foreground Windows PowerShell loop. It
+polls visible Windows notifications, deduplicates repeated records, matches
+Codex notification metadata, requests helper-owned WAV playback for matches,
+and writes local diagnostics.
+
+Run it directly from Windows PowerShell on Windows 11:
+
+```powershell
+Set-Location C:\path\to\codex-notification-booster
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav"
+```
+
+Use `-PollSeconds`, `-DurationMinutes`, or `-Once` for bounded manual runs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav" -DurationMinutes 5 -PollSeconds 2
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav" -Once
+```
+
+The helper requires a local `.wav` file. It validates the path at startup and
+logs `config-valid`, `missing-sound-file`, `unsupported-sound-file`, or related
+diagnostic codes.
+
+By default, JSONL diagnostics are written outside this repository:
+
+```text
+%LOCALAPPDATA%\CodexNotificationBooster\helper-diagnostics.jsonl
+```
+
+Override the diagnostics path when needed:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav" -LogPath "$env:LOCALAPPDATA\CodexNotificationBooster\manual-helper.jsonl"
+```
+
+Diagnostics include timestamps, event codes, app identity fields, notification
+IDs, dedup keys, match/playback status, listener permission status, config
+status, and loop errors. They omit raw notification body text, title text,
+text lines, and raw XML by default.
+
+The helper prints listener permission status on startup. If permission is
+unavailable or denied, enable notification access for the PowerShell host in
+Windows Settings, then run the helper again. This slice reuses the same
+foreground PowerShell notification listener path as the metadata probe.
+
+Stop the foreground helper by pressing `Ctrl+C`, closing the PowerShell window,
+using `-Once`, or choosing a bounded `-DurationMinutes` value. There is no
+installer, tray UI, service, autostart, or background daemon in this slice.
+
+### Helper manual verification
+
+1. Run the helper directly from Windows PowerShell, not as a WSL runtime.
+2. Pass a known local `.wav` path with `-SoundPath`.
+3. Confirm startup output reports the diagnostics path and notification
+   listener permission status.
+4. Trigger or wait for a Codex notification during the foreground run.
+5. Trigger or wait for at least one non-Codex notification.
+6. Inspect `%LOCALAPPDATA%\CodexNotificationBooster\helper-diagnostics.jsonl`
+   or the path passed with `-LogPath`.
+7. Confirm matched Codex notifications emit `matched-playback-requested` once
+   per dedup key, repeated visible notifications emit
+   `duplicate-notification-skipped`, and non-Codex notifications emit
+   `ignored-notification`.
+8. Confirm diagnostics do not include raw notification body text, title text,
+   text lines, or raw XML.
+
+The helper remains read-only with respect to notifications. It does not dismiss,
+clear, reply to, move, or otherwise mutate notifications. It also does not
+suppress original notification audio, change Codex app mixer volume, change
+global Windows volume, change Windows notification volume, or change other
+application audio.
+
+The helper-loop check uses fake notification records and fake playback, so it
+does not require live notification listener APIs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-helper-loop.ps1
+```

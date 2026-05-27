@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "appDisplayName": "Codex",
+  "appUserModelId": "OpenAI.Codex_2p2nqsd0c76g0!App",
+  "appId": "App",
+  "packageFamilyName": "OpenAI.Codex_2p2nqsd0c76g0",
+  "title": "Redacted Codex notification",
+  "body": "[redacted]",
+  "textLines": [
+    "Redacted Codex notification",
+    "[redacted]"
+  ]
+}

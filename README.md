@@ -1,6 +1,6 @@
 # Codex Notification Booster
 
-A Windows 11 helper for making Codex completion notifications easier to hear without raising all Codex app audio.
+A Windows 11 helper for making Codex notifications easier to hear without raising all Codex app audio.
 
 ## Workflow
 
@@ -56,7 +56,7 @@ Probe logs may contain raw notification titles, bodies, app identity fields, tim
 1. Run the probe directly from Windows PowerShell, not from WSL.
 2. Confirm the startup output reports notification listener permission status.
 3. If prompted, grant notification listener access for the PowerShell host.
-4. Trigger or wait for one Codex completion notification during the polling window.
+4. Trigger or wait for one Codex notification during the polling window.
 5. Trigger at least one non-Codex notification for comparison.
 6. Open the JSONL log under `%LOCALAPPDATA%\CodexNotificationBooster\notification-probe.jsonl` or the path supplied with `-LogPath`.
 7. Confirm records include broad metadata such as capture time, notification creation time, notification ID, app display name, app identity fields when available, text lines/title/body, raw XML when available, and a dedup key.
@@ -68,4 +68,11 @@ From Windows PowerShell or WSL with `powershell.exe` available:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-probe.ps1
+```
+
+The matcher-only check uses redacted/minimal fixtures and does not require
+Windows notification listener APIs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-matcher.ps1
 ```

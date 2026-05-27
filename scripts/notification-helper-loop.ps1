@@ -220,7 +220,7 @@ function Invoke-NotificationHelperLoop {
             -Level $(if ($configDecision.valid) { 'info' } else { 'error' }) `
             -Data @{ soundPath = $configDecision.soundPath })
 
-    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    $previousVisible = New-Object 'System.Collections.Generic.HashSet[string]'
     $deadline = [System.DateTimeOffset]::UtcNow.AddMinutes($DurationMinutes)
     $pollCount = 0
     $matched = 0
@@ -233,15 +233,18 @@ function Invoke-NotificationHelperLoop {
         $pollCount += 1
         try {
             $notifications = @(& $NotificationProvider)
+            $currentVisible = New-Object 'System.Collections.Generic.HashSet[string]'
             foreach ($record in @($notifications)) {
                 $dedupKey = Get-RecordDedupKey -Record $record
                 $record = Set-RecordDedupKey -Record $record -DedupKey $dedupKey
 
-                if (-not $seen.Add($dedupKey)) {
+                $isRepeatedInCurrentPoll = -not $currentVisible.Add($dedupKey)
+                $wasVisibleLastPoll = $previousVisible.Contains($dedupKey)
+                if ($isRepeatedInCurrentPoll -or $wasVisibleLastPoll) {
                     $duplicatesSkipped += 1
                     Write-HelperDiagnosticEvent -Path $resolvedLogPath -Event (New-HelperDiagnosticEvent `
                             -Code 'duplicate-notification-skipped' `
-                            -Message 'Skipped repeated visible notification with an already processed dedup key.' `
+                            -Message 'Skipped repeated visible notification with an already visible dedup key.' `
                             -Record $record)
                     continue
                 }
@@ -269,6 +272,8 @@ function Invoke-NotificationHelperLoop {
                         -Record $record `
                         -Result $result)
             }
+
+            $previousVisible = $currentVisible
         }
         catch {
             $errors += 1

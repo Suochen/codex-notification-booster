@@ -4,6 +4,10 @@ namespace CodexNotificationBooster.Core;
 
 public sealed class RedactingFileLogger
 {
+    public const int DefaultRetentionDays = 7;
+    public const long DefaultMaxTotalBytes = 5 * 1024 * 1024;
+    public const long DefaultMaxFileBytes = 1024 * 1024;
+
     private static readonly HashSet<string> RedactedKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "title",
@@ -14,20 +18,41 @@ public sealed class RedactingFileLogger
     };
 
     private readonly AppPaths _paths;
-    private readonly int _retainedFileCount;
+    private readonly int _retentionDays;
+    private readonly long _maxTotalBytes;
+    private readonly long _maxFileBytes;
+    private readonly Func<DateTime> _utcNowProvider;
 
-    public RedactingFileLogger(AppPaths paths, int retainedFileCount = 7)
+    public RedactingFileLogger(
+        AppPaths paths,
+        int retentionDays = DefaultRetentionDays,
+        long maxTotalBytes = DefaultMaxTotalBytes,
+        long maxFileBytes = DefaultMaxFileBytes,
+        Func<DateTime>? utcNowProvider = null)
     {
-        if (retainedFileCount < 1)
+        if (retentionDays < 1)
         {
-            throw new ArgumentOutOfRangeException(nameof(retainedFileCount), "Retention must keep at least one file.");
+            throw new ArgumentOutOfRangeException(nameof(retentionDays), "Retention must keep at least one day.");
+        }
+
+        if (maxTotalBytes < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxTotalBytes), "Total retained log size must be positive.");
+        }
+
+        if (maxFileBytes < 1 || maxFileBytes > maxTotalBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxFileBytes), "Single log file size must be positive and no larger than total retention.");
         }
 
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
-        _retainedFileCount = retainedFileCount;
+        _retentionDays = retentionDays;
+        _maxTotalBytes = maxTotalBytes;
+        _maxFileBytes = maxFileBytes;
+        _utcNowProvider = utcNowProvider ?? (() => DateTime.UtcNow);
     }
 
-    public string CurrentLogFilePath => Path.Combine(_paths.LogsDirectory, $"{DateTime.UtcNow:yyyyMMdd}.jsonl");
+    public string CurrentLogFilePath => ResolveWritableLogFilePath(0);
 
     public void Log(LogLevel level, string eventCode, string message, IReadOnlyDictionary<string, object?>? metadata = null)
     {
@@ -56,23 +81,75 @@ public sealed class RedactingFileLogger
             payload["metadata"] = RedactMetadata(metadata);
         }
 
-        var json = JsonSerializer.Serialize(payload);
-        File.AppendAllText(CurrentLogFilePath, json + Environment.NewLine);
+        var line = JsonSerializer.Serialize(payload) + Environment.NewLine;
+        var lineBytes = System.Text.Encoding.UTF8.GetByteCount(line);
+
+        ApplyRetention();
+
+        var logFilePath = ResolveWritableLogFilePath(lineBytes);
+        File.AppendAllText(logFilePath, line);
+
+        ApplyRetention();
     }
 
     public void ApplyRetention()
     {
         _paths.EnsureDirectories();
 
+        var cutoffUtc = _utcNowProvider().Date.AddDays(-_retentionDays);
         var files = new DirectoryInfo(_paths.LogsDirectory)
             .GetFiles("*.jsonl")
-            .OrderByDescending(file => file.Name, StringComparer.Ordinal)
+            .OrderBy(file => file.LastWriteTimeUtc)
+            .ThenBy(file => file.Name, StringComparer.Ordinal)
             .ToArray();
 
-        foreach (var file in files.Skip(_retainedFileCount))
+        foreach (var file in files.Where(file => file.LastWriteTimeUtc < cutoffUtc).ToArray())
         {
             file.Delete();
         }
+
+        files = new DirectoryInfo(_paths.LogsDirectory)
+            .GetFiles("*.jsonl")
+            .OrderBy(file => file.LastWriteTimeUtc)
+            .ThenBy(file => file.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        long totalBytes = files.Sum(file => file.Length);
+        foreach (var file in files)
+        {
+            if (totalBytes <= _maxTotalBytes)
+            {
+                break;
+            }
+
+            totalBytes -= file.Length;
+            file.Delete();
+        }
+    }
+
+    private string ResolveWritableLogFilePath(int incomingLineBytes)
+    {
+        _paths.EnsureDirectories();
+
+        var prefix = _utcNowProvider().ToString("yyyyMMdd");
+        var candidates = Directory.GetFiles(_paths.LogsDirectory, $"{prefix}*.jsonl")
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        if (candidates.Length == 0)
+        {
+            return Path.Combine(_paths.LogsDirectory, $"{prefix}.jsonl");
+        }
+
+        var current = candidates[^1];
+        var currentLength = new FileInfo(current).Length;
+        if (currentLength + incomingLineBytes <= _maxFileBytes)
+        {
+            return current;
+        }
+
+        var nextIndex = candidates.Length;
+        return Path.Combine(_paths.LogsDirectory, $"{prefix}-{nextIndex:D2}.jsonl");
     }
 
     private static Dictionary<string, object?> RedactMetadata(IReadOnlyDictionary<string, object?> metadata)

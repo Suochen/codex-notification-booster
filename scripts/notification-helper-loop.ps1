@@ -244,6 +244,7 @@ function Invoke-NotificationHelperLoop {
             -Data @{ soundPath = $configDecision.soundPath })
 
     $previousVisible = New-Object 'System.Collections.Generic.HashSet[string]'
+    $hasStartupBaseline = $false
     $deadline = [System.DateTimeOffset]::UtcNow.AddMinutes($DurationMinutes)
     $pollCount = 0
     $matched = 0
@@ -292,9 +293,25 @@ function Invoke-NotificationHelperLoop {
                 $record = $entry.record
                 $visibleInstanceKey = $entry.visibleInstanceKey
 
-                $isRepeatedInCurrentPoll = -not $currentVisible.Add($visibleInstanceKey)
+                if (-not $currentVisible.Add($visibleInstanceKey)) {
+                    $duplicatesSkipped += 1
+                    Write-HelperDiagnosticEvent -Path $resolvedLogPath -Event (New-HelperDiagnosticEvent `
+                            -Code 'duplicate-notification-skipped' `
+                            -Message 'Skipped repeated visible notification with an already visible dedup key.' `
+                            -Record $record)
+                    continue
+                }
+
+                if (-not $hasStartupBaseline) {
+                    Write-HelperDiagnosticEvent -Path $resolvedLogPath -Event (New-HelperDiagnosticEvent `
+                            -Code 'startup-baseline-notification-skipped' `
+                            -Message 'Recorded currently visible notification during startup baseline without helper-owned playback.' `
+                            -Record $record)
+                    continue
+                }
+
                 $wasVisibleLastPoll = $previousVisible.Contains($visibleInstanceKey)
-                if ($isRepeatedInCurrentPoll -or $wasVisibleLastPoll) {
+                if ($wasVisibleLastPoll) {
                     $duplicatesSkipped += 1
                     Write-HelperDiagnosticEvent -Path $resolvedLogPath -Event (New-HelperDiagnosticEvent `
                             -Code 'duplicate-notification-skipped' `
@@ -328,6 +345,7 @@ function Invoke-NotificationHelperLoop {
             }
 
             $previousVisible = $currentVisible
+            $hasStartupBaseline = $true
         }
         catch {
             $errors += 1

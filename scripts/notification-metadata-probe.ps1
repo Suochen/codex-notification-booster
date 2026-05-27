@@ -174,15 +174,38 @@ function Get-Sha256Hex {
     }
 }
 
+function Get-DedupRecordValue {
+    param(
+        $Record,
+        [string]$PropertyName
+    )
+
+    if ($null -eq $Record) {
+        return $null
+    }
+
+    if ($Record -is [System.Collections.IDictionary]) {
+        if ($Record.Contains($PropertyName)) {
+            return $Record[$PropertyName]
+        }
+        return $null
+    }
+
+    return Get-PropertyValue -InputObject $Record -PropertyName $PropertyName
+}
+
 function Get-NotificationDedupKey {
     param($Record)
 
     $parts = @(
-        $Record.appUserModelId,
-        $Record.notificationId,
-        $Record.creationTime,
-        ($Record.textLines -join "`n"),
-        $Record.rawXmlSha256
+        (Get-DedupRecordValue -Record $Record -PropertyName 'appUserModelId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'notificationId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'creationTime')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'appId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'packageFamilyName')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'appDisplayName')
+        ((ConvertTo-StringArray -Value (Get-DedupRecordValue -Record $Record -PropertyName 'textLines')) -join "`n")
+        (Get-DedupRecordValue -Record $Record -PropertyName 'rawXmlSha256')
     )
 
     Get-Sha256Hex -Text ($parts -join '|')
@@ -424,6 +447,9 @@ function Invoke-SelfTest {
 
         $record = [ordered]@{
             appUserModelId = 'sample.app'
+            appId = 'App'
+            packageFamilyName = 'sample.package'
+            appDisplayName = 'Sample App'
             notificationId = 42
             creationTime = '2026-05-27T00:00:00.0000000Z'
             textLines = @('Title', 'Body')
@@ -433,6 +459,21 @@ function Invoke-SelfTest {
         $key2 = Get-NotificationDedupKey -Record $record
         if ($key1 -ne $key2) {
             throw 'Dedup key is not stable.'
+        }
+
+        $sameVisibleNotification = [ordered]@{
+            appUserModelId = 'sample.app'
+            appId = 'App'
+            packageFamilyName = 'sample.package'
+            appDisplayName = 'Sample App'
+            notificationId = 43
+            creationTime = '2026-05-27T00:00:01.0000000Z'
+            textLines = @('Title', 'Body')
+            rawXmlSha256 = 'def'
+        }
+        $key3 = Get-NotificationDedupKey -Record $sameVisibleNotification
+        if ($key1 -eq $key3) {
+            throw 'Archival dedup key should distinguish different notification instances.'
         }
 
         $jsonLine = ConvertTo-JsonLine -Record ([ordered]@{

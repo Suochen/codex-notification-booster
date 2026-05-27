@@ -70,6 +70,41 @@ function Assert-EventCode {
     }
 }
 
+function Assert-EventCodeCount {
+    param(
+        $Records,
+        [string]$Code,
+        [int]$ExpectedCount
+    )
+
+    $actualCount = @($Records | Where-Object { $_.code -eq $Code }).Count
+    if ($actualCount -ne $ExpectedCount) {
+        throw "Expected diagnostic event code '$Code' count $ExpectedCount, got $actualCount."
+    }
+}
+
+function Copy-RecordWithVolatileNotificationFields {
+    param(
+        $Record,
+        [string]$NotificationId,
+        [string]$CreationTime,
+        [string]$RawXmlSha256
+    )
+
+    $copy = [ordered]@{}
+    foreach ($property in $Record.PSObject.Properties) {
+        if ($property.Name -ne 'dedupKey') {
+            $copy[$property.Name] = $property.Value
+        }
+    }
+
+    $copy['notificationId'] = $NotificationId
+    $copy['creationTime'] = $CreationTime
+    $copy['rawXmlSha256'] = $RawXmlSha256
+
+    [pscustomobject]$copy
+}
+
 $tempRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('codex-notification-booster-helper-loop-check-' + [guid]::NewGuid().ToString('n'))
 $wavPath = Join-Path -Path $tempRoot -ChildPath 'custom.wav'
 $logPath = Join-Path -Path $tempRoot -ChildPath 'helper-diagnostics.jsonl'
@@ -78,14 +113,39 @@ $playbackCalls = New-Object System.Collections.Generic.List[string]
 try {
     New-MinimalWavFile -Path $wavPath
 
-    $codexRecord = Read-Fixture -Name 'codex-general.json'
-    $codexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'codex-dedup-1' -Force
+    $codexRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-1' `
+        -CreationTime '2026-05-27T00:00:01.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-1'
+    $repeatedCodexRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-2' `
+        -CreationTime '2026-05-27T00:00:02.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-2'
+    $codexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-4' `
+        -CreationTime '2026-05-27T00:00:04.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-4'
+    $repeatedCodexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-5' `
+        -CreationTime '2026-05-27T00:00:05.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-5'
+    $reappearedCodexRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-3' `
+        -CreationTime '2026-05-27T00:00:03.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-3'
     $nonCodexRecord = Read-Fixture -Name 'edge.json'
     $nonCodexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'edge-dedup-1' -Force
 
     $polls = @(
-        @($codexRecord, $nonCodexRecord),
-        @($codexRecord)
+        @($codexRecord, $codexSiblingRecord, $nonCodexRecord),
+        @($repeatedCodexRecord, $repeatedCodexSiblingRecord),
+        @(),
+        @($reappearedCodexRecord)
     )
     $providerState = [pscustomobject]@{
         pollIndex = 0
@@ -111,16 +171,16 @@ try {
         -Config @{ soundPath = $wavPath } `
         -LogPath $logPath `
         -PollSeconds 1 `
-        -MaxPolls 2
+        -MaxPolls 4
 
-    if ($summary.playbackRequests -ne 1) {
-        throw "Expected one playback request, got $($summary.playbackRequests)."
+    if ($summary.playbackRequests -ne 3) {
+        throw "Expected three playback requests, got $($summary.playbackRequests)."
     }
-    if ($playbackCalls.Count -ne 1) {
-        throw "Expected one fake playback call, got $($playbackCalls.Count)."
+    if ($playbackCalls.Count -ne 3) {
+        throw "Expected three fake playback calls, got $($playbackCalls.Count)."
     }
-    if ($summary.duplicatesSkipped -ne 1) {
-        throw "Expected one duplicate skip, got $($summary.duplicatesSkipped)."
+    if ($summary.duplicatesSkipped -ne 2) {
+        throw "Expected two duplicate skips, got $($summary.duplicatesSkipped)."
     }
     if ($summary.ignored -ne 1) {
         throw "Expected one ignored non-Codex notification, got $($summary.ignored)."
@@ -131,13 +191,13 @@ try {
         'helper-started',
         'log-path-ready',
         'config-valid',
-        'matched-playback-requested',
         'ignored-notification',
-        'duplicate-notification-skipped',
         'helper-stopped'
     )) {
         Assert-EventCode -Records $records -Code $code
     }
+    Assert-EventCodeCount -Records $records -Code 'matched-playback-requested' -ExpectedCount 3
+    Assert-EventCodeCount -Records $records -Code 'duplicate-notification-skipped' -ExpectedCount 2
 
     $diagnosticJson = Get-Content -LiteralPath $logPath -Raw
     foreach ($forbidden in @('"body"', '"rawXml"', '"textLines"', '"title"')) {
@@ -147,8 +207,10 @@ try {
     }
 
     $failureLogPath = Join-Path -Path $tempRoot -ChildPath 'helper-failure-diagnostics.jsonl'
+    $failingCodexRecord = Read-Fixture -Name 'codex-general.json'
+    $failingCodexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'codex-dedup-failure' -Force
     $failingProvider = {
-        return @($codexRecord)
+        return @($failingCodexRecord)
     }.GetNewClosure()
     $failingPlayback = {
         param([string]$SoundPath)

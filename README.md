@@ -10,6 +10,90 @@ Current development state: product discovery. Do not implement product behavior 
 
 Runtime boundary: the helper must run directly on Windows 11. WSL is only an editing and repository-management environment.
 
+## Portable Windows tray build
+
+Maintainers can publish a portable, single-directory Windows 11 tray build with:
+
+```powershell
+Set-Location C:\path\to\codex-notification-booster
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-portable-windows.ps1
+```
+
+Publishing requires the .NET 8 SDK on the build machine. If `dotnet.exe` is not
+on PATH, pass it explicitly:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-portable-windows.ps1 -DotNetPath "C:\Program Files\dotnet\dotnet.exe"
+```
+
+The default output directory is:
+
+```text
+artifacts\portable-windows\Release\win-x64
+```
+
+The script wraps this publish shape:
+
+```powershell
+dotnet publish .\src\CodexNotificationBooster.Tray\CodexNotificationBooster.Tray.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o .\artifacts\portable-windows\Release\win-x64
+```
+
+This is a portable directory build, not an installer. It does not create an
+MSI, setup wizard, Windows service, Start Menu entry, or startup-on-boot task.
+The published app runs directly on Windows 11 and does not require WSL at
+runtime.
+
+### Launch
+
+On Windows 11, open the publish directory and start:
+
+```text
+CodexNotificationBooster.exe
+```
+
+The app appears as a tray icon named `Codex Notification Booster`. Right-click
+the tray icon for the current controls: enabled/paused, audio ducking on/off,
+test sound, restore volume, open log directory, and exit.
+
+Local runtime data is stored outside the portable directory:
+
+```text
+%LOCALAPPDATA%\CodexNotificationBooster
+%LOCALAPPDATA%\CodexNotificationBooster\logs
+```
+
+Logs are JSONL files with local diagnostics. They redact raw notification
+title, body, text lines, and raw XML.
+
+### Portable manual verification
+
+Run these checks directly on Windows 11 from the published portable directory:
+
+1. Launch `CodexNotificationBooster.exe` and confirm the tray icon appears.
+2. Right-click the tray icon and choose `测试提示音`; confirm the fixed helper
+   sound plays.
+3. Trigger or wait for a real Codex notification; confirm helper playback occurs
+   for the Codex notification.
+4. Start the app while old notifications are already visible in Windows
+   notification center; confirm the baseline/backlog does not cause repeated
+   helper playback for already-seen notifications.
+5. With another non-Codex audio source playing, trigger a Codex notification and
+   confirm audio ducking lowers eligible non-Codex audio during helper playback.
+6. Confirm volume returns automatically after the short ducking window.
+7. If volume does not recover, choose `恢复音量` from the tray menu and confirm
+   the affected session volume is restored.
+8. Choose `打开日志目录` and confirm JSONL logs are under
+   `%LOCALAPPDATA%\CodexNotificationBooster\logs`.
+9. Inspect only event codes and redacted metadata needed for verification, such
+   as `tray-started`, `listener-access-status`, `matched-playback-requested`,
+   `duplicate-notification-skipped`, `audio-duck-restore-due`, and
+   `tray-exit`. Do not upload, paste, or request raw notification title, body,
+   text lines, or XML.
+10. Leave the app running for several polling intervals after a temporary
+    listener or playback error and confirm it remains in the tray.
+11. Choose `退出` from the tray menu and confirm the tray icon disappears and
+    the latest log includes `tray-exit`.
+
 ## Windows notification metadata probe
 
 The first-stage probe is a Windows PowerShell script for discovering what metadata Windows exposes for visible toast notifications. It is read-only: it does not play sounds, change volume, dismiss notifications, clear notifications, move notifications, reply to notifications, or change notification state.

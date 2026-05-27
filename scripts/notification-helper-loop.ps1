@@ -154,6 +154,29 @@ function Get-RecordDedupKey {
     return Get-NotificationDedupKey -Record $Record
 }
 
+function Get-HelperVisibleStableKey {
+    param($Record)
+
+    $parts = @(
+        (Get-DedupRecordValue -Record $Record -PropertyName 'appUserModelId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'appId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'packageFamilyName')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'appDisplayName')
+        ((ConvertTo-StringArray -Value (Get-DedupRecordValue -Record $Record -PropertyName 'textLines')) -join "`n")
+    )
+
+    return Get-Sha256Hex -Text ($parts -join '|')
+}
+
+function New-HelperVisibleInstanceKey {
+    param(
+        [string]$StableVisibleKey,
+        [int]$OccurrenceOrdinal
+    )
+
+    return "$StableVisibleKey|$OccurrenceOrdinal"
+}
+
 function Set-RecordDedupKey {
     param(
         $Record,
@@ -233,13 +256,44 @@ function Invoke-NotificationHelperLoop {
         $pollCount += 1
         try {
             $notifications = @(& $NotificationProvider)
-            $currentVisible = New-Object 'System.Collections.Generic.HashSet[string]'
+            $preparedRecords = New-Object System.Collections.Generic.List[object]
+            $recordsByStableVisibleKey = @{}
+
             foreach ($record in @($notifications)) {
                 $dedupKey = Get-RecordDedupKey -Record $record
                 $record = Set-RecordDedupKey -Record $record -DedupKey $dedupKey
+                $stableVisibleKey = Get-HelperVisibleStableKey -Record $record
+                $entry = [pscustomobject]@{
+                    record = $record
+                    dedupKey = $dedupKey
+                    stableVisibleKey = $stableVisibleKey
+                    visibleInstanceKey = $null
+                }
+                [void]$preparedRecords.Add($entry)
 
-                $isRepeatedInCurrentPoll = -not $currentVisible.Add($dedupKey)
-                $wasVisibleLastPoll = $previousVisible.Contains($dedupKey)
+                if (-not $recordsByStableVisibleKey.ContainsKey($stableVisibleKey)) {
+                    $recordsByStableVisibleKey[$stableVisibleKey] = New-Object System.Collections.Generic.List[object]
+                }
+                [void]$recordsByStableVisibleKey[$stableVisibleKey].Add($entry)
+            }
+
+            foreach ($stableVisibleKey in @($recordsByStableVisibleKey.Keys)) {
+                $occurrenceOrdinal = 0
+                foreach ($entry in @($recordsByStableVisibleKey[$stableVisibleKey] | Sort-Object -Property dedupKey)) {
+                    $occurrenceOrdinal += 1
+                    $entry.visibleInstanceKey = New-HelperVisibleInstanceKey `
+                        -StableVisibleKey $stableVisibleKey `
+                        -OccurrenceOrdinal $occurrenceOrdinal
+                }
+            }
+
+            $currentVisible = New-Object 'System.Collections.Generic.HashSet[string]'
+            foreach ($entry in $preparedRecords) {
+                $record = $entry.record
+                $visibleInstanceKey = $entry.visibleInstanceKey
+
+                $isRepeatedInCurrentPoll = -not $currentVisible.Add($visibleInstanceKey)
+                $wasVisibleLastPoll = $previousVisible.Contains($visibleInstanceKey)
                 if ($isRepeatedInCurrentPoll -or $wasVisibleLastPoll) {
                     $duplicatesSkipped += 1
                     Write-HelperDiagnosticEvent -Path $resolvedLogPath -Event (New-HelperDiagnosticEvent `

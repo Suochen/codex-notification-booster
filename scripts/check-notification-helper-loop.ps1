@@ -123,6 +123,16 @@ try {
         -NotificationId 'volatile-live-id-2' `
         -CreationTime '2026-05-27T00:00:02.0000000Z' `
         -RawXmlSha256 'volatile-live-xml-hash-2'
+    $codexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-4' `
+        -CreationTime '2026-05-27T00:00:04.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-4'
+    $repeatedCodexSiblingRecord = Copy-RecordWithVolatileNotificationFields `
+        -Record (Read-Fixture -Name 'codex-general.json') `
+        -NotificationId 'volatile-live-id-5' `
+        -CreationTime '2026-05-27T00:00:05.0000000Z' `
+        -RawXmlSha256 'volatile-live-xml-hash-5'
     $reappearedCodexRecord = Copy-RecordWithVolatileNotificationFields `
         -Record (Read-Fixture -Name 'codex-general.json') `
         -NotificationId 'volatile-live-id-3' `
@@ -132,8 +142,8 @@ try {
     $nonCodexRecord | Add-Member -NotePropertyName dedupKey -NotePropertyValue 'edge-dedup-1' -Force
 
     $polls = @(
-        @($codexRecord, $nonCodexRecord),
-        @($repeatedCodexRecord),
+        @($codexRecord, $codexSiblingRecord, $nonCodexRecord),
+        @($repeatedCodexRecord, $repeatedCodexSiblingRecord),
         @(),
         @($reappearedCodexRecord)
     )
@@ -163,14 +173,14 @@ try {
         -PollSeconds 1 `
         -MaxPolls 4
 
-    if ($summary.playbackRequests -ne 2) {
-        throw "Expected two playback requests, got $($summary.playbackRequests)."
+    if ($summary.playbackRequests -ne 3) {
+        throw "Expected three playback requests, got $($summary.playbackRequests)."
     }
-    if ($playbackCalls.Count -ne 2) {
-        throw "Expected two fake playback calls, got $($playbackCalls.Count)."
+    if ($playbackCalls.Count -ne 3) {
+        throw "Expected three fake playback calls, got $($playbackCalls.Count)."
     }
-    if ($summary.duplicatesSkipped -ne 1) {
-        throw "Expected one duplicate skip, got $($summary.duplicatesSkipped)."
+    if ($summary.duplicatesSkipped -ne 2) {
+        throw "Expected two duplicate skips, got $($summary.duplicatesSkipped)."
     }
     if ($summary.ignored -ne 1) {
         throw "Expected one ignored non-Codex notification, got $($summary.ignored)."
@@ -186,8 +196,8 @@ try {
     )) {
         Assert-EventCode -Records $records -Code $code
     }
-    Assert-EventCodeCount -Records $records -Code 'matched-playback-requested' -ExpectedCount 2
-    Assert-EventCodeCount -Records $records -Code 'duplicate-notification-skipped' -ExpectedCount 1
+    Assert-EventCodeCount -Records $records -Code 'matched-playback-requested' -ExpectedCount 3
+    Assert-EventCodeCount -Records $records -Code 'duplicate-notification-skipped' -ExpectedCount 2
 
     $diagnosticJson = Get-Content -LiteralPath $logPath -Raw
     foreach ($forbidden in @('"body"', '"rawXml"', '"textLines"', '"title"')) {

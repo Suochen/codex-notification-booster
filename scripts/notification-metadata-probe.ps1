@@ -199,10 +199,13 @@ function Get-NotificationDedupKey {
 
     $parts = @(
         (Get-DedupRecordValue -Record $Record -PropertyName 'appUserModelId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'notificationId')
+        (Get-DedupRecordValue -Record $Record -PropertyName 'creationTime')
         (Get-DedupRecordValue -Record $Record -PropertyName 'appId')
         (Get-DedupRecordValue -Record $Record -PropertyName 'packageFamilyName')
         (Get-DedupRecordValue -Record $Record -PropertyName 'appDisplayName')
         ((ConvertTo-StringArray -Value (Get-DedupRecordValue -Record $Record -PropertyName 'textLines')) -join "`n")
+        (Get-DedupRecordValue -Record $Record -PropertyName 'rawXmlSha256')
     )
 
     Get-Sha256Hex -Text ($parts -join '|')
@@ -469,8 +472,8 @@ function Invoke-SelfTest {
             rawXmlSha256 = 'def'
         }
         $key3 = Get-NotificationDedupKey -Record $sameVisibleNotification
-        if ($key1 -ne $key3) {
-            throw 'Dedup key should ignore volatile live notification fields.'
+        if ($key1 -eq $key3) {
+            throw 'Archival dedup key should distinguish different notification instances.'
         }
 
         $jsonLine = ConvertTo-JsonLine -Record ([ordered]@{

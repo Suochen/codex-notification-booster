@@ -33,12 +33,6 @@ public sealed class VisibleNotificationProcessor
             if (!currentVisible.Add(entry.VisibleInstanceKey))
             {
                 duplicatesSkipped += 1;
-                events.Add(new NotificationProcessingEvent(
-                    Code: "duplicate-notification-skipped",
-                    Message: "Skipped repeated visible notification with an already visible dedup key.",
-                    Level: LogLevel.Info,
-                    Record: entry.Record,
-                    PlaybackResult: null));
                 continue;
             }
 
@@ -56,12 +50,6 @@ public sealed class VisibleNotificationProcessor
             if (_previousVisible.Contains(entry.VisibleInstanceKey))
             {
                 duplicatesSkipped += 1;
-                events.Add(new NotificationProcessingEvent(
-                    Code: "duplicate-notification-skipped",
-                    Message: "Skipped repeated visible notification with an already visible dedup key.",
-                    Level: LogLevel.Info,
-                    Record: entry.Record,
-                    PlaybackResult: null));
                 continue;
             }
 

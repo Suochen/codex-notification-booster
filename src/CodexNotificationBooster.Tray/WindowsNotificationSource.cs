@@ -8,6 +8,7 @@ internal sealed class WindowsNotificationSource : INotificationSource
 {
     private readonly RedactingFileLogger _logger;
     private UserNotificationListener? _listener;
+    private UserNotificationListenerAccessStatus? _lastLoggedAccessStatus;
 
     public WindowsNotificationSource(RedactingFileLogger logger)
     {
@@ -22,9 +23,25 @@ internal sealed class WindowsNotificationSource : INotificationSource
         var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return notifications
-            .Select(ConvertToRecord)
-            .ToArray();
+        var records = new List<NotificationRecord>();
+        foreach (var notification in notifications)
+        {
+            try
+            {
+                records.Add(ConvertToRecord(notification));
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, "notification-conversion-skipped", "Skipped one visible notification because its Windows metadata could not be converted.", new Dictionary<string, object?>
+                {
+                    ["exceptionType"] = ex.GetType().FullName,
+                    ["error"] = ex.Message,
+                    ["stackTrace"] = ex.ToString()
+                });
+            }
+        }
+
+        return records;
     }
 
     private UserNotificationListener GetListener()
@@ -53,6 +70,22 @@ internal sealed class WindowsNotificationSource : INotificationSource
             cancellationToken.ThrowIfCancellationRequested();
         }
 
+        LogAccessStatusIfChanged(status);
+
+        if (status != UserNotificationListenerAccessStatus.Allowed)
+        {
+            throw new InvalidOperationException("Windows notification listener access is not allowed.");
+        }
+    }
+
+    private void LogAccessStatusIfChanged(UserNotificationListenerAccessStatus status)
+    {
+        if (_lastLoggedAccessStatus == status)
+        {
+            return;
+        }
+
+        _lastLoggedAccessStatus = status;
         _logger.Log(
             status == UserNotificationListenerAccessStatus.Allowed ? LogLevel.Info : LogLevel.Error,
             "listener-access-status",
@@ -61,39 +94,35 @@ internal sealed class WindowsNotificationSource : INotificationSource
             {
                 ["accessStatus"] = status.ToString()
             });
-
-        if (status != UserNotificationListenerAccessStatus.Allowed)
-        {
-            throw new InvalidOperationException("Windows notification listener access is not allowed.");
-        }
     }
 
     private static NotificationRecord ConvertToRecord(UserNotification userNotification)
     {
-        var notification = userNotification.Notification;
-        var appInfo = userNotification.AppInfo;
-        var displayInfo = appInfo?.DisplayInfo;
-        var package = appInfo?.Package;
+        var notification = SafeGet(() => userNotification.Notification);
+        var appInfo = SafeGet(() => userNotification.AppInfo);
+        var displayInfo = SafeGet(() => appInfo?.DisplayInfo);
+        var package = SafeGet(() => appInfo?.Package);
         var textLines = GetToastTextLines(notification).ToArray();
 
         return new NotificationRecord
         {
             SchemaVersion = 1,
             CapturedAt = DateTimeOffset.UtcNow,
-            CreationTime = userNotification.CreationTime.ToUniversalTime(),
-            NotificationId = userNotification.Id,
-            AppDisplayName = displayInfo?.DisplayName,
-            AppUserModelId = appInfo?.AppUserModelId,
-            AppId = appInfo?.Id,
-            PackageFamilyName = appInfo?.PackageFamilyName,
-            PackageFullName = package?.Id?.FullName
+            CreationTime = SafeGet(() => userNotification.CreationTime.ToUniversalTime()),
+            NotificationId = SafeGet<uint?>(() => userNotification.Id),
+            AppDisplayName = SafeGet(() => displayInfo?.DisplayName),
+            AppUserModelId = SafeGet(() => appInfo?.AppUserModelId),
+            AppId = SafeGet(() => appInfo?.Id),
+            PackageFamilyName = SafeGet(() => appInfo?.PackageFamilyName),
+            PackageFullName = SafeGet(() => package?.Id?.FullName)
         }.WithSanitizedTextLines(textLines);
     }
 
     private static IEnumerable<string> GetToastTextLines(Notification? notification)
     {
-        var binding = notification?.Visual?.GetBinding(KnownNotificationBindings.ToastGeneric);
-        var textElements = binding?.GetTextElements();
+        var visual = SafeGet(() => notification?.Visual);
+        var binding = SafeGet(() => visual?.GetBinding(KnownNotificationBindings.ToastGeneric));
+        var textElements = SafeGet(() => binding?.GetTextElements());
         if (textElements is null)
         {
             yield break;
@@ -101,10 +130,23 @@ internal sealed class WindowsNotificationSource : INotificationSource
 
         foreach (var element in textElements)
         {
-            if (!string.IsNullOrWhiteSpace(element.Text))
+            var text = SafeGet(() => element.Text);
+            if (!string.IsNullOrWhiteSpace(text))
             {
-                yield return element.Text;
+                yield return text;
             }
+        }
+    }
+
+    private static T? SafeGet<T>(Func<T?> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch
+        {
+            return default;
         }
     }
 

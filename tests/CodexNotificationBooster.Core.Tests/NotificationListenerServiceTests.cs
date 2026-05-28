@@ -5,6 +5,7 @@ namespace CodexNotificationBooster.Core.Tests;
 public sealed class NotificationListenerServiceTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "cnb-listener-tests-" + Guid.NewGuid().ToString("n"));
+    private DateTimeOffset _now = new(2026, 5, 28, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task PollFailureLogsRedactedErrorAndKeepsServiceAlive()
@@ -26,6 +27,33 @@ public sealed class NotificationListenerServiceTests : IDisposable
         var logText = File.ReadAllText(logger.CurrentLogFilePath);
         Assert.Contains("listener-poll-failed", logText, StringComparison.Ordinal);
         Assert.Contains("listener permission denied", logText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RepeatedPollFailuresThrottleVisibleStatusNotifications()
+    {
+        var paths = new AppPaths(_rootPath);
+        var logger = new RedactingFileLogger(paths);
+        var balloons = new List<(string Title, string Message)>();
+        var service = new NotificationListenerService(
+            new ThrowingSource(new InvalidOperationException("listener projection failure")),
+            new RecordingPlayback(),
+            new VisibleNotificationProcessor(),
+            logger,
+            () => true,
+            (title, message) => balloons.Add((title, message)),
+            () => _now,
+            TimeSpan.FromMinutes(5));
+
+        await service.PollOnceAsync(CancellationToken.None);
+        _now = _now.AddSeconds(2);
+        await service.PollOnceAsync(CancellationToken.None);
+        _now = _now.AddMinutes(5);
+        await service.PollOnceAsync(CancellationToken.None);
+
+        Assert.Equal(2, balloons.Count);
+        var logText = File.ReadAllText(logger.CurrentLogFilePath);
+        Assert.Equal(3, CountOccurrences(logText, "listener-poll-failed"));
     }
 
     [Fact]
@@ -109,5 +137,18 @@ public sealed class NotificationListenerServiceTests : IDisposable
         public void Play(NotificationRecord record)
         {
         }
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count += 1;
+            index += value.Length;
+        }
+
+        return count;
     }
 }

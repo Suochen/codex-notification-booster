@@ -83,6 +83,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         ]);
 
         _notifyIcon.DoubleClick += (_, _) => ShowStatusBalloon("Codex Notification Booster", "托盘助手正在运行。");
+        _notifyIcon.MouseUp += (_, args) =>
+        {
+            if (args.Button == MouseButtons.Right)
+            {
+                ShowTrayMenu();
+            }
+        };
 
         RefreshMenuLabels();
 
@@ -260,6 +267,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         action();
+    }
+
+    private void ShowTrayMenu()
+    {
+        if (_notifyIcon.ContextMenuStrip is not { IsDisposed: false } menu)
+        {
+            return;
+        }
+
+        menu.Show(Cursor.Position);
     }
 
     private void ShowStatusBalloon(string title, string message)

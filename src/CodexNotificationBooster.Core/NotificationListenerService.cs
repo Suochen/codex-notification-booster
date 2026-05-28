@@ -18,6 +18,9 @@ public sealed class NotificationListenerService
     private readonly RedactingFileLogger _logger;
     private readonly Func<bool> _isEnabledProvider;
     private readonly Action<string, string> _statusNotifier;
+    private readonly Func<DateTimeOffset> _nowProvider;
+    private readonly TimeSpan _statusNotificationCooldown;
+    private readonly Dictionary<string, DateTimeOffset> _lastStatusNotificationByKey = new(StringComparer.Ordinal);
 
     public NotificationListenerService(
         INotificationSource source,
@@ -25,7 +28,9 @@ public sealed class NotificationListenerService
         VisibleNotificationProcessor processor,
         RedactingFileLogger logger,
         Func<bool> isEnabledProvider,
-        Action<string, string> statusNotifier)
+        Action<string, string> statusNotifier,
+        Func<DateTimeOffset>? nowProvider = null,
+        TimeSpan? statusNotificationCooldown = null)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
@@ -33,6 +38,8 @@ public sealed class NotificationListenerService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _isEnabledProvider = isEnabledProvider ?? throw new ArgumentNullException(nameof(isEnabledProvider));
         _statusNotifier = statusNotifier ?? throw new ArgumentNullException(nameof(statusNotifier));
+        _nowProvider = nowProvider ?? (() => DateTimeOffset.UtcNow);
+        _statusNotificationCooldown = statusNotificationCooldown ?? TimeSpan.FromMinutes(5);
     }
 
     public async Task PollOnceAsync(CancellationToken cancellationToken)
@@ -49,7 +56,7 @@ public sealed class NotificationListenerService
 
             if (result.PlaybackFailures > 0)
             {
-                _statusNotifier("Codex Notification Booster", "提示音播放失败，托盘助手仍在运行。");
+                NotifyStatusIfDue("playback-failure", "Codex Notification Booster", "提示音播放失败，托盘助手仍在运行。");
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -61,11 +68,25 @@ public sealed class NotificationListenerService
             _logger.Log(LogLevel.Error, "listener-poll-failed", "Recoverable notification listener polling failure.", new Dictionary<string, object?>
             {
                 ["exceptionType"] = ex.GetType().FullName,
-                ["error"] = ex.Message
+                ["error"] = ex.Message,
+                ["stackTrace"] = ex.ToString()
             });
 
-            _statusNotifier("Codex Notification Booster", "通知监听暂时不可用，托盘助手仍在运行。");
+            NotifyStatusIfDue("listener-poll-failed", "Codex Notification Booster", "通知监听暂时不可用，托盘助手仍在运行。");
         }
+    }
+
+    private void NotifyStatusIfDue(string key, string title, string message)
+    {
+        var now = _nowProvider();
+        if (_lastStatusNotificationByKey.TryGetValue(key, out var last) &&
+            now - last < _statusNotificationCooldown)
+        {
+            return;
+        }
+
+        _lastStatusNotificationByKey[key] = now;
+        _statusNotifier(title, message);
     }
 
     private void LogProcessingEvent(NotificationProcessingEvent item)

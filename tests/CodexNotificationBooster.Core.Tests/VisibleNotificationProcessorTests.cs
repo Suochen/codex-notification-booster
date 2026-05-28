@@ -42,7 +42,7 @@ public sealed class VisibleNotificationProcessorTests
         var result = processor.Process([notification], isEnabled: true, played.Add);
 
         Assert.Single(played);
-        Assert.Equal("duplicate-notification-skipped", Assert.Single(result.Events).Code);
+        Assert.Empty(result.Events);
         Assert.Equal(1, result.DuplicatesSkipped);
     }
 

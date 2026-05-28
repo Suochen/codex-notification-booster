@@ -1,264 +1,243 @@
 # Codex Notification Booster
 
-A Windows 11 helper for making Codex notifications easier to hear without raising all Codex app audio.
+一个 Windows 11 托盘小工具：当 Codex 发出 Windows 通知时，额外播放一段更明显的提示音，并在需要时短暂降低其他应用的播放音量。
 
-## Workflow
+它的目标很窄：让 Codex 通知更容易被听见。它不会提高 Codex 整个应用音量，也不会修改系统主音量。
 
-This repo is governed by the standalone Matt AI Workflow pack at `Suochen/matt-ai-workflow`.
+## 当前状态
 
-Current development state: product discovery. Do not implement product behavior until Requirement Analysis, `grill-me`, PRD approval, and issue publication gates have completed.
+- 运行方式：portable 目录，解压/复制后双击运行。
+- 支持系统：Windows 11 x64。
+- 当前没有安装器、开机自启、开始菜单入口或后台服务。
+- 当前没有音效选择器；内置一段固定提示音。
+- WSL 只用于开发和构建，不是运行环境。
 
-Runtime boundary: the helper must run directly on Windows 11. WSL is only an editing and repository-management environment.
+## 工作原理
 
-## Portable Windows tray build
+程序不是监控 Codex 进程，而是监听 Windows 通知中心里的 toast 通知。
 
-Maintainers can publish a portable, single-directory Windows 11 tray build with:
+流程是：
+
+1. Windows 出现一条通知。
+2. 程序读取 Windows 暴露的通知元数据。
+3. 如果判断为 Codex 通知，就由本工具进程播放提示音。
+4. 如果开启“音频闪避”，程序会在提示音播放前短暂降低其他可识别播放会话的音量，随后自动恢复。
+
+这意味着：复制到另一台电脑后，只要那台电脑的 Codex 会正常发 Windows 通知，并且 Windows 授权本工具读取通知，就可以工作。
+
+## 下载/运行
+
+当前项目使用 portable 目录发布。发布目录类似：
+
+```text
+artifacts\portable-windows\Release\win-x64
+```
+
+运行文件是：
+
+```text
+CodexNotificationBooster.exe
+```
+
+但它不是单文件程序。不要只复制 `CodexNotificationBooster.exe`，必须复制整个 `win-x64` 目录，否则缺少依赖文件时可能无法启动。
+
+在本机当前构建中，完整路径是：
+
+```text
+C:\Users\Shuhari\code\codex-notification-booster\artifacts\portable-windows\Release\win-x64\CodexNotificationBooster.exe
+```
+
+启动方式：
+
+1. 打开 `win-x64` 目录。
+2. 双击 `CodexNotificationBooster.exe`。
+3. 程序会出现在 Windows 右下角托盘区域。
+4. 右键托盘图标打开菜单。
+
+退出方式：
+
+1. 右键托盘图标。
+2. 点击 `退出`。
+
+## 首次运行权限
+
+首次运行时，Windows 可能会要求授予读取通知的权限。
+
+如果程序提示监听不可用，检查：
+
+1. Windows 设置里是否允许应用读取通知。
+2. Codex 自己是否能正常发 Windows 通知。
+3. Windows 通知中心里是否能看到 Codex 通知。
+
+程序需要读取通知元数据，但不会清除、移动、回复、关闭或修改任何通知。
+
+## 托盘菜单
+
+右键托盘图标可以看到中文菜单：
+
+- `已启用` / `已暂停`：开启或暂停 Codex 通知增强提示音。
+- `音频闪避：开` / `音频闪避：关`：开启或关闭短暂降低其他应用音量。
+- `测试提示音`：立即播放一次内置提示音。
+- `恢复音量`：手动尝试恢复被降低的应用音量。
+- `打开日志目录`：打开本地日志目录。
+- `退出`：关闭程序。
+
+## 音频行为
+
+程序会播放自己的提示音，因此不会把 Codex 应用本身的音量调大。
+
+如果开启音频闪避：
+
+- 程序会尝试读取当前 Windows 音频播放会话。
+- 对可识别、可安全调整的其他播放会话短暂降低音量。
+- 播放提示音后自动恢复。
+- 如果某些会话无法读取或无法调整，程序会跳过或记录诊断，不会调整麦克风输入音量。
+- 如果恢复异常，可以在托盘菜单点击 `恢复音量`。
+
+受 Windows 系统主音量限制：如果电脑总音量很低，提示音也不能真正突破系统主音量上限。音频闪避的作用是让提示音相对更突出。
+
+## 日志和隐私
+
+运行日志保存在本机：
+
+```text
+%LOCALAPPDATA%\CodexNotificationBooster\logs
+```
+
+日志用于排查：
+
+- 程序是否启动；
+- 通知监听权限状态；
+- 是否识别到 Codex 通知；
+- 是否播放提示音；
+- 是否执行音频闪避和恢复；
+- 是否出现可恢复错误。
+
+正常托盘程序日志默认不会记录原始通知正文、标题、文本行或原始 XML。
+
+不要把本机日志直接上传到 GitHub，除非已经检查并确认没有敏感内容。
+
+## 复制到其他电脑
+
+可以复制到其他 Windows 11 x64 电脑测试，但要复制整个发布目录：
+
+```text
+win-x64\
+```
+
+目标电脑需要满足：
+
+1. Windows 11 x64。
+2. Codex Windows 应用能正常发通知。
+3. 首次运行时允许本工具读取通知。
+4. Windows 通知中心里能出现 Codex 通知。
+
+如果另一台电脑上的 Codex app identity 和本机不同，程序可能识别不到 Codex 通知。此时需要查看本地日志里的应用身份字段，再调整匹配规则。
+
+## 常见问题
+
+### 双击 exe 没反应
+
+确认你复制的是整个 `win-x64` 目录，而不是只有 `CodexNotificationBooster.exe`。
+
+也可以从 PowerShell 里启动，观察是否有错误：
+
+```powershell
+Set-Location C:\path\to\win-x64
+.\CodexNotificationBooster.exe
+```
+
+### 右下角看不到图标
+
+检查 Windows 托盘隐藏图标区域。程序图标名称是：
+
+```text
+Codex Notification Booster
+```
+
+### 没有提示音
+
+按顺序检查：
+
+1. 右键托盘图标，点击 `测试提示音`。
+2. 确认 Windows 主音量不是静音。
+3. 确认本工具没有在音量混合器里被静音。
+4. 确认 Codex 通知确实出现在 Windows 通知中心。
+5. 打开日志目录，看是否有监听权限或播放失败记录。
+
+### 一直弹“通知监听暂时不可用”
+
+这通常表示 Windows 通知监听 API 当前不可用或权限异常。
+
+处理方式：
+
+1. 退出程序后重新启动。
+2. 检查 Windows 通知权限。
+3. 确认不是从 WSL 里运行 exe。
+4. 打开日志目录查看 `listener-poll-failed` 或 `listener-access-status`。
+
+### 音乐播放时 Windows 自带通知声音听不到
+
+这正是本工具要解决的问题之一。Windows 自带 toast 声音可能在某些场景下不明显或不播放；本工具用自己的进程播放提示音，并可短暂降低其他应用音量，让 Codex 通知更容易被听见。
+
+## 从源码构建 portable 版本
+
+需要 .NET 8 SDK。
+
+在 Windows PowerShell 里运行：
 
 ```powershell
 Set-Location C:\path\to\codex-notification-booster
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-portable-windows.ps1
 ```
 
-Publishing requires the .NET 8 SDK on the build machine. If `dotnet.exe` is not
-on PATH, pass it explicitly:
+如果 `dotnet.exe` 不在 PATH：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-portable-windows.ps1 -DotNetPath "C:\Program Files\dotnet\dotnet.exe"
 ```
 
-The default output directory is:
+默认输出目录：
 
 ```text
 artifacts\portable-windows\Release\win-x64
 ```
 
-The script wraps this publish shape:
+底层发布形态：
 
 ```powershell
 dotnet publish .\src\CodexNotificationBooster.Tray\CodexNotificationBooster.Tray.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o .\artifacts\portable-windows\Release\win-x64
 ```
 
-This is a portable directory build, not an installer. It does not create an
-MSI, setup wizard, Windows service, Start Menu entry, or startup-on-boot task.
-The published app runs directly on Windows 11 and does not require WSL at
-runtime.
+## 开发验证
 
-### Launch
-
-On Windows 11, open the publish directory and start:
-
-```text
-CodexNotificationBooster.exe
-```
-
-The app appears as a tray icon named `Codex Notification Booster`. Right-click
-the tray icon for the current controls: enabled/paused, audio ducking on/off,
-test sound, restore volume, open log directory, and exit.
-
-Local runtime data is stored outside the portable directory:
-
-```text
-%LOCALAPPDATA%\CodexNotificationBooster
-%LOCALAPPDATA%\CodexNotificationBooster\logs
-```
-
-Logs are JSONL files with local diagnostics. They redact raw notification
-title, body, text lines, and raw XML.
-
-### Portable manual verification
-
-Run these checks directly on Windows 11 from the published portable directory:
-
-1. Launch `CodexNotificationBooster.exe` and confirm the tray icon appears.
-2. Right-click the tray icon and choose `测试提示音`; confirm the fixed helper
-   sound plays.
-3. Trigger or wait for a real Codex notification; confirm helper playback occurs
-   for the Codex notification.
-4. Start the app while old notifications are already visible in Windows
-   notification center; confirm the baseline/backlog does not cause repeated
-   helper playback for already-seen notifications.
-5. With another non-Codex audio source playing, trigger a Codex notification and
-   confirm audio ducking lowers eligible non-Codex audio during helper playback.
-6. Confirm volume returns automatically after the short ducking window.
-7. If volume does not recover, choose `恢复音量` from the tray menu and confirm
-   the affected session volume is restored.
-8. Choose `打开日志目录` and confirm JSONL logs are under
-   `%LOCALAPPDATA%\CodexNotificationBooster\logs`.
-9. Inspect only event codes and redacted metadata needed for verification, such
-   as `tray-started`, `listener-access-status`, `matched-playback-requested`,
-   `duplicate-notification-skipped`, `audio-duck-restore-due`, and
-   `tray-exit`. Do not upload, paste, or request raw notification title, body,
-   text lines, or XML.
-10. Leave the app running for several polling intervals after a temporary
-    listener or playback error and confirm it remains in the tray.
-11. Choose `退出` from the tray menu and confirm the tray icon disappears and
-    the latest log includes `tray-exit`.
-
-## Windows notification metadata probe
-
-The first-stage probe is a Windows PowerShell script for discovering what metadata Windows exposes for visible toast notifications. It is read-only: it does not play sounds, change volume, dismiss notifications, clear notifications, move notifications, reply to notifications, or change notification state.
-
-Run it from Windows PowerShell on Windows 11:
+常用检查：
 
 ```powershell
-Set-Location C:\path\to\codex-notification-booster
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-metadata-probe.ps1
+dotnet build CodexNotificationBooster.sln
+dotnet test tests\CodexNotificationBooster.Core.Tests\CodexNotificationBooster.Core.Tests.csproj
 ```
 
-The default mode polls for a bounded window of 10 minutes. Use `-DurationMinutes` and `-PollSeconds` to change the window:
+Windows portable smoke 建议：
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-metadata-probe.ps1 -DurationMinutes 5 -PollSeconds 2
-```
+1. 发布 portable build。
+2. 启动 `CodexNotificationBooster.exe`。
+3. 确认托盘图标出现。
+4. 右键托盘图标，点击 `测试提示音`。
+5. 触发一条 Codex 通知。
+6. 确认提示音播放一次，不循环触发。
+7. 检查日志没有持续刷 `listener-poll-failed`。
 
-Use `-Once` to capture only notifications currently visible to the Windows notification listener:
+## 项目边界
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-metadata-probe.ps1 -Once
-```
+当前版本不做这些事：
 
-By default, JSONL records are written outside this repository:
+- 不安装 Windows 服务。
+- 不创建开机自启。
+- 不写安装器卸载信息。
+- 不修改系统主音量。
+- 不提高 Codex 应用本身音量。
+- 不清除或修改通知。
+- 不上传日志。
 
-```text
-%LOCALAPPDATA%\CodexNotificationBooster\notification-probe.jsonl
-```
-
-You can override the local log path:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-metadata-probe.ps1 -LogPath "$env:LOCALAPPDATA\CodexNotificationBooster\manual-probe.jsonl"
-```
-
-The probe prints the Windows notification listener permission status on startup. If access is `Unspecified`, it requests access using the supported Windows API. If access is denied or unavailable, it exits with a non-zero code and prints remediation guidance. Enable notification access for the PowerShell host in Windows Settings, then run the probe again.
-
-### Log sensitivity
-
-Probe logs may contain raw notification titles, bodies, app identity fields, timestamps, and raw toast XML. Treat `notification-probe.jsonl` as sensitive local data. Do not commit it, upload it, paste it into GitHub, or share it unless you have reviewed and intentionally redacted the contents.
-
-### Manual verification
-
-1. Run the probe directly from Windows PowerShell, not from WSL.
-2. Confirm the startup output reports notification listener permission status.
-3. If prompted, grant notification listener access for the PowerShell host.
-4. Trigger or wait for one Codex notification during the polling window.
-5. Trigger at least one non-Codex notification for comparison.
-6. Open the JSONL log under `%LOCALAPPDATA%\CodexNotificationBooster\notification-probe.jsonl` or the path supplied with `-LogPath`.
-7. Confirm records include broad metadata such as capture time, notification creation time, notification ID, app display name, app identity fields when available, text lines/title/body, raw XML when available, and a dedup key.
-8. Confirm the probe did not play sound, change volume, dismiss, clear, move, reply to, or modify notifications.
-
-### Development checks
-
-From Windows PowerShell or WSL with `powershell.exe` available:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-probe.ps1
-```
-
-The matcher-only check uses redacted/minimal fixtures and does not require
-Windows notification listener APIs:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-matcher.ps1
-```
-
-The first playback-slice check also uses redacted/minimal fixtures and a fake
-playback implementation. It proves Codex metadata requests helper-owned
-playback, QQ/TopNotify/Edge metadata is ignored, and config/playback failures
-return diagnostics without notification listener APIs or volume changes:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-playback.ps1
-```
-
-To manually verify real helper-owned playback on Windows 11, pass a local `.wav`
-file to the isolated playback adapter:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\play-notification-sound.ps1 -SoundPath "C:\path\to\custom.wav"
-```
-
-The playback adapter only plays the configured local `.wav` file from the helper
-process. It does not read notifications, suppress the original notification
-sound, change Codex app mixer volume, change global Windows volume, change
-Windows notification volume, or change other application audio.
-
-## Foreground notification helper
-
-The first runnable helper slice is a foreground Windows PowerShell loop. It
-polls visible Windows notifications, deduplicates repeated records, matches
-Codex notification metadata, requests helper-owned WAV playback for matches,
-and writes local diagnostics.
-
-Run it directly from Windows PowerShell on Windows 11:
-
-```powershell
-Set-Location C:\path\to\codex-notification-booster
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav"
-```
-
-Use `-PollSeconds`, `-DurationMinutes`, or `-Once` for bounded manual runs:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav" -DurationMinutes 5 -PollSeconds 2
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav" -Once
-```
-
-The helper requires a local `.wav` file. It validates the path at startup and
-logs `config-valid`, `missing-sound-file`, `unsupported-sound-file`, or related
-diagnostic codes.
-
-By default, JSONL diagnostics are written outside this repository:
-
-```text
-%LOCALAPPDATA%\CodexNotificationBooster\helper-diagnostics.jsonl
-```
-
-Override the diagnostics path when needed:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\notification-helper-loop.ps1 -SoundPath "C:\path\to\custom.wav" -LogPath "$env:LOCALAPPDATA\CodexNotificationBooster\manual-helper.jsonl"
-```
-
-Diagnostics include timestamps, event codes, app identity fields, notification
-IDs, dedup keys, match/playback status, listener permission status, config
-status, and loop errors. They omit raw notification body text, title text,
-text lines, and raw XML by default.
-
-The helper prints listener permission status on startup. If permission is
-unavailable or denied, enable notification access for the PowerShell host in
-Windows Settings, then run the helper again. This slice reuses the same
-foreground PowerShell notification listener path as the metadata probe.
-
-Stop the foreground helper by pressing `Ctrl+C`, closing the PowerShell window,
-using `-Once`, or choosing a bounded `-DurationMinutes` value. There is no
-installer, tray UI, service, autostart, or background daemon in this slice.
-
-### Helper manual verification
-
-1. Run the helper directly from Windows PowerShell, not as a WSL runtime.
-2. Pass a known local `.wav` path with `-SoundPath`.
-3. Confirm startup output reports the diagnostics path and notification
-   listener permission status.
-4. Trigger or wait for a Codex notification during the foreground run.
-5. Trigger or wait for at least one non-Codex notification.
-6. Inspect `%LOCALAPPDATA%\CodexNotificationBooster\helper-diagnostics.jsonl`
-   or the path passed with `-LogPath`.
-7. Confirm matched Codex notifications emit `matched-playback-requested` once
-   per dedup key, repeated visible notifications emit
-   `duplicate-notification-skipped`, and non-Codex notifications emit
-   `ignored-notification`.
-8. Confirm diagnostics do not include raw notification body text, title text,
-   text lines, or raw XML.
-
-The helper remains read-only with respect to notifications. It does not dismiss,
-clear, reply to, move, or otherwise mutate notifications. It also does not
-suppress original notification audio, change Codex app mixer volume, change
-global Windows volume, change Windows notification volume, or change other
-application audio.
-
-The helper-loop check uses fake notification records and fake playback, so it
-does not require live notification listener APIs:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-notification-helper-loop.ps1
-```
+后续如果需要安装包、开机自启、单文件发布、音效选择器或更复杂的通知匹配，应单独开 issue/PRD。

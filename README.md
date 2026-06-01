@@ -28,10 +28,11 @@
 
 1. 在 GitHub Releases 下载 `CodexNotificationBooster-win-x64.zip`。
 2. 解压整个 zip。
-3. 打开 `win-x64` 文件夹。
-4. 双击 `CodexNotificationBooster.exe`。
-5. 程序会出现在 Windows 右下角托盘区域。
-6. 右键托盘图标打开菜单。
+3. 打开 Codex 设置，把 `轮次完成通知` 设为 `始终`。
+4. 打开 `win-x64` 文件夹。
+5. 双击 `CodexNotificationBooster.exe`。
+6. 程序会出现在 Windows 右下角托盘区域。
+7. 右键托盘图标打开菜单。
 
 首次运行时，Windows 可能会请求通知读取权限。这个权限用于识别 Codex 通知，不会清除、回复、修改或上传你的通知内容。
 

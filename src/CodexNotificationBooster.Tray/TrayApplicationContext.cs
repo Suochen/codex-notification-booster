@@ -12,6 +12,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly AppStateStore _stateStore;
     private readonly HelperSoundAssetProvider _soundAssetProvider;
     private readonly RedactingFileLogger _logger;
+    private readonly StartupEntryManager _startupEntryManager;
     private readonly AudioDuckingCoordinator _audioDuckingCoordinator;
     private readonly NotificationListenerService _notificationListenerService;
     private readonly System.Windows.Forms.Timer _pollTimer;
@@ -20,6 +21,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _notifyIcon;
     private readonly ToolStripMenuItem _enabledMenuItem;
     private readonly ToolStripMenuItem _audioDuckingMenuItem;
+    private readonly ToolStripMenuItem _startupMenuItem;
     private readonly ToolStripMenuItem _testSoundMenuItem;
     private readonly ToolStripMenuItem _restoreVolumeMenuItem;
     private readonly ToolStripMenuItem _openLogsMenuItem;
@@ -34,6 +36,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _soundAssetProvider = new HelperSoundAssetProvider(_paths);
         _logger = new RedactingFileLogger(_paths);
         _state = _stateStore.Load();
+        _startupEntryManager = new StartupEntryManager(
+            new HkcuRunStartupEntryStore(),
+            () => Environment.ProcessPath ?? Application.ExecutablePath);
         _audioDuckingCoordinator = new AudioDuckingCoordinator(
             new WindowsAudioSessionVolumeController(),
             () => _state,
@@ -53,10 +58,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _paths.EnsureDirectories();
         _soundAssetProvider.EnsurePresent();
         _logger.ApplyRetention();
+        _startupEntryManager.RefreshIfEnabled();
         _logger.Log(LogLevel.Info, "tray-started", "Tray helper shell started.");
 
         _enabledMenuItem = new ToolStripMenuItem();
         _audioDuckingMenuItem = new ToolStripMenuItem();
+        _startupMenuItem = new ToolStripMenuItem();
         _testSoundMenuItem = new ToolStripMenuItem("测试提示音", null, (_, _) => RunMenuAction("test-sound-menu", TestSound));
         _restoreVolumeMenuItem = new ToolStripMenuItem("恢复音量", null, (_, _) => RunMenuAction("restore-volume-menu", RestoreVolume));
         _openLogsMenuItem = new ToolStripMenuItem("打开日志目录", null, (_, _) => RunMenuAction("open-logs-menu", OpenLogsDirectory));
@@ -64,7 +71,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Information,
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
             Visible = true,
             Text = "Codex Notification Booster",
             ContextMenuStrip = new ContextMenuStrip()
@@ -74,6 +81,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         [
             _enabledMenuItem,
             _audioDuckingMenuItem,
+            _startupMenuItem,
             new ToolStripSeparator(),
             _testSoundMenuItem,
             _restoreVolumeMenuItem,
@@ -125,6 +133,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (!_state.IsAudioDuckingEnabled)
         {
             _audioDuckingCoordinator.RestoreNow();
+        }
+
+        RefreshMenuLabels();
+    }
+
+    private void ToggleStartup()
+    {
+        if (_startupEntryManager.IsEnabled())
+        {
+            _startupEntryManager.Disable();
+            _logger.Log(LogLevel.Info, "startup-disabled", "Removed current-user startup entry.");
+            ShowStatusBalloon("Codex Notification Booster", "已关闭开机自启动。");
+        }
+        else
+        {
+            _startupEntryManager.Enable();
+            _logger.Log(LogLevel.Info, "startup-enabled", "Created current-user startup entry.");
+            ShowStatusBalloon("Codex Notification Booster", "已开启开机自启动。");
         }
 
         RefreshMenuLabels();
@@ -208,16 +234,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         _enabledMenuItem.Text = _state.IsEnabled ? "已启用" : "已暂停";
         _audioDuckingMenuItem.Text = _state.IsAudioDuckingEnabled ? "音频闪避：开" : "音频闪避：关";
+        _startupMenuItem.Text = _startupEntryManager.IsEnabled() ? "开机自启动：开" : "开机自启动：关";
 
         _enabledMenuItem.Click -= EnabledMenuClicked;
         _audioDuckingMenuItem.Click -= AudioDuckingMenuClicked;
+        _startupMenuItem.Click -= StartupMenuClicked;
         _enabledMenuItem.Click += EnabledMenuClicked;
         _audioDuckingMenuItem.Click += AudioDuckingMenuClicked;
+        _startupMenuItem.Click += StartupMenuClicked;
     }
 
     private void EnabledMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-enabled-menu", ToggleEnabled);
 
     private void AudioDuckingMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-audio-ducking-menu", ToggleAudioDucking);
+
+    private void StartupMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-startup-menu", ToggleStartup);
 
     private void RunMenuAction(string eventCode, Action action)
     {

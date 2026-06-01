@@ -1,6 +1,6 @@
 # Codex Notification Booster
 
-[中文](README.md) | English
+[Official site / Language switch](https://suochen.github.io/codex-notification-booster/) | [GitHub Release](https://github.com/Suochen/codex-notification-booster/releases/tag/v0.1.0)
 
 Make Codex completion notifications noticeable, especially when music is playing.
 

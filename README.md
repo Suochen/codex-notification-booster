@@ -1,6 +1,6 @@
 # Codex Notification Booster
 
-中文 | [English](README.en.md)
+[官方网站 / Language switch](https://suochen.github.io/codex-notification-booster/) | [GitHub Release](https://github.com/Suochen/codex-notification-booster/releases/tag/v0.1.0)
 
 让 Codex 完成任务时真正提醒你，尤其是在你听音乐的时候。
 

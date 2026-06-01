@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Codex Notification Booster makes Codex completion notifications easier to notice on Windows 11.">
+  <title>Codex Notification Booster</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Codex Notification Booster">
+      <span class="brand-mark" aria-hidden="true">CNB</span>
+      <span>Codex Notification Booster</span>
+    </a>
+    <nav class="nav-actions" aria-label="Page actions">
+      <a href="https://github.com/Suochen/codex-notification-booster" data-i18n="nav.github">GitHub</a>
+      <div class="language-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="zh" aria-pressed="true">中文</button>
+        <button type="button" data-lang="en" aria-pressed="false">English</button>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow" data-i18n="hero.eyebrow">Windows 11 托盘通知增强器</p>
+        <h1 data-i18n="hero.title">让 Codex 完成任务时真正提醒你。</h1>
+        <p class="lede" data-i18n="hero.lede">
+          当你在听音乐、看视频或专注别的窗口时，Codex 完成通知很容易被错过。这个小工具会为 Codex 通知播放更明显的提示音，并可短暂降低其他应用音量。
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://github.com/Suochen/codex-notification-booster/releases/download/v0.1.0/CodexNotificationBooster-win-x64.zip" data-i18n="hero.download">下载 Windows x64 zip</a>
+          <a class="button secondary" href="https://github.com/Suochen/codex-notification-booster/releases/tag/v0.1.0" data-i18n="hero.release">查看 Release</a>
+        </div>
+        <p class="small-note" data-i18n="hero.note">portable 自包含版本，解压后运行，不需要另外安装 .NET。</p>
+      </div>
+      <div class="signal-panel" aria-label="Notification flow illustration">
+        <img src="assets/hero-notification.png" alt="" aria-hidden="true">
+        <div class="signal-grid">
+          <div class="signal-card active">
+            <span data-i18n="visual.codex">Codex 完成任务</span>
+            <strong>01</strong>
+          </div>
+          <div class="signal-line"></div>
+          <div class="signal-card">
+            <span data-i18n="visual.toast">Windows 通知出现</span>
+            <strong>02</strong>
+          </div>
+          <div class="signal-line"></div>
+          <div class="signal-card highlight">
+            <span data-i18n="visual.sound">提示音更明显</span>
+            <strong>03</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section split">
+      <div>
+        <p class="section-label" data-i18n="why.label">设计理由</p>
+        <h2 data-i18n="why.title">不是替换 Codex，只是补上容易错过的提醒。</h2>
+      </div>
+      <p data-i18n="why.body">
+        Codex 自己会发 Windows 通知，但在播放音乐时，系统通知声音可能不响、不明显，或者被其他声音盖过去。Codex Notification Booster 监听通知中心里的 Codex 通知，再由自己的进程播放提示音。
+      </p>
+    </section>
+
+    <section class="section feature-list">
+      <div class="feature">
+        <h3 data-i18n="features.listen.title">监听 Codex 通知</h3>
+        <p data-i18n="features.listen.body">读取 Windows 暴露的通知元数据，识别 Codex 通知，不监控 Codex 进程。</p>
+      </div>
+      <div class="feature">
+        <h3 data-i18n="features.sound.title">额外提示音</h3>
+        <p data-i18n="features.sound.body">识别到 Codex 通知后，由工具自己的进程播放更明显的提示音。</p>
+      </div>
+      <div class="feature">
+        <h3 data-i18n="features.duck.title">音频闪避</h3>
+        <p data-i18n="features.duck.body">可在提示音播放时短暂降低其他应用音量，然后自动恢复。</p>
+      </div>
+      <div class="feature">
+        <h3 data-i18n="features.startup.title">可选开机自启</h3>
+        <p data-i18n="features.startup.body">默认关闭。开启后写入当前用户 HKCU Run 启动项，关闭时会删除。</p>
+      </div>
+    </section>
+
+    <section class="section steps">
+      <p class="section-label" data-i18n="steps.label">使用方法</p>
+      <h2 data-i18n="steps.title">下载，解压，打开 Codex 通知选项。</h2>
+      <ol>
+        <li data-i18n="steps.one">下载 GitHub Release 里的 zip。</li>
+        <li data-i18n="steps.two">解压整个 zip，打开 `win-x64` 文件夹。</li>
+        <li data-i18n="steps.three">在 Codex 设置中，把“轮次完成通知”设为“始终”。</li>
+        <li data-i18n="steps.four">双击 `CodexNotificationBooster.exe`，然后在系统托盘里右键打开菜单。</li>
+      </ol>
+    </section>
+
+    <section class="section privacy">
+      <div>
+        <p class="section-label" data-i18n="privacy.label">隐私和边界</p>
+        <h2 data-i18n="privacy.title">本地运行，不上传通知内容。</h2>
+      </div>
+      <ul>
+        <li data-i18n="privacy.one">日志保存在 `%LOCALAPPDATA%\\CodexNotificationBooster\\logs`。</li>
+        <li data-i18n="privacy.two">正常日志不记录原始通知标题、正文、文本行或 XML。</li>
+        <li data-i18n="privacy.three">不会修改系统主音量，不会提高 Codex 应用音量。</li>
+        <li data-i18n="privacy.four">不创建 Windows 服务，不默认开机自启。</li>
+      </ul>
+    </section>
+
+    <section class="final-cta">
+      <h2 data-i18n="cta.title">让 Codex 完成时别再被你错过。</h2>
+      <a class="button primary" href="https://github.com/Suochen/codex-notification-booster/releases/download/v0.1.0/CodexNotificationBooster-win-x64.zip" data-i18n="cta.download">下载最新版</a>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

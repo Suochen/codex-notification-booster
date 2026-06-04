@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Identifies Codex notifications from plain metadata records.
+Identifies supported target app notifications from plain metadata records.
 
 .DESCRIPTION
 This matcher is intentionally metadata-only. It accepts records shaped like the
@@ -14,6 +14,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:CodexAppUserModelId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
 $script:CodexPackageFamilyName = 'OpenAI.Codex_2p2nqsd0c76g0'
+$script:ClaudeDesktopAppUserModelId = 'Claude_pzs8sxrjxfjjc!Claude'
+$script:ClaudeDesktopPackageFamilyName = 'Claude_pzs8sxrjxfjjc'
 
 function Get-MetadataValue {
     param(
@@ -76,8 +78,22 @@ function Test-CodexNotificationMetadata {
             -MatchedRule 'codex-package-family-name'
     }
 
+    if ($appUserModelId -eq $script:ClaudeDesktopAppUserModelId) {
+        return New-NotificationMatchDecision `
+            -Matched $true `
+            -Reason 'appUserModelId matches observed Claude Desktop identity' `
+            -MatchedRule 'claude-desktop-app-user-model-id'
+    }
+
+    if ($packageFamilyName -eq $script:ClaudeDesktopPackageFamilyName) {
+        return New-NotificationMatchDecision `
+            -Matched $true `
+            -Reason 'packageFamilyName matches observed Claude Desktop identity' `
+            -MatchedRule 'claude-desktop-package-family-name'
+    }
+
     return New-NotificationMatchDecision `
         -Matched $false `
-        -Reason 'notification metadata does not match observed Codex identity fields' `
-        -MatchedRule 'no-codex-identity-match'
+        -Reason 'notification metadata does not match observed Codex or Claude Desktop identity fields' `
+        -MatchedRule 'no-target-app-identity-match'
 }

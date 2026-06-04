@@ -94,7 +94,7 @@ public sealed class VisibleNotificationProcessor
                     Status: "ignored",
                     PlaybackRequested: false,
                     DiagnosticCode: "playback-paused",
-                    DiagnosticMessage: "Matched Codex notification while helper playback was paused.",
+                    DiagnosticMessage: "Matched target notification while helper playback was paused.",
                     MatchDecision: matchDecision);
             }
             else

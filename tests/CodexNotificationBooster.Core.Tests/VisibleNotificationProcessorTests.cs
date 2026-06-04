@@ -31,6 +31,20 @@ public sealed class VisibleNotificationProcessorTests
     }
 
     [Fact]
+    public void NewClaudeDesktopNotificationPlaysHelperSoundAfterBaseline()
+    {
+        var processor = new VisibleNotificationProcessor();
+        var played = new List<NotificationRecord>();
+
+        processor.Process([], isEnabled: true, played.Add);
+        var result = processor.Process([ClaudeDesktopNotification(1, "message ready")], isEnabled: true, played.Add);
+
+        Assert.Single(played);
+        Assert.Equal("matched-playback-requested", Assert.Single(result.Events).Code);
+        Assert.Equal(1, result.PlaybackRequests);
+    }
+
+    [Fact]
     public void StillVisibleNotificationDoesNotReplayOnEveryPoll()
     {
         var processor = new VisibleNotificationProcessor();
@@ -119,5 +133,21 @@ public sealed class VisibleNotificationProcessorTests
             PackageFamilyName = CodexNotificationMatcher.CodexPackageFamilyName,
             RawXmlSha256 = "xml-" + id
         }.WithSanitizedTextLines(["Codex", text]);
+    }
+
+    private static NotificationRecord ClaudeDesktopNotification(uint id, string text)
+    {
+        return new NotificationRecord
+        {
+            SchemaVersion = 1,
+            CreationTime = new DateTimeOffset(2026, 06, 04, 10, 0, (int)id, TimeSpan.Zero),
+            NotificationId = id,
+            AppDisplayName = "Claude",
+            AppUserModelId = CodexNotificationMatcher.ClaudeDesktopAppUserModelId,
+            AppId = "Claude",
+            PackageFamilyName = CodexNotificationMatcher.ClaudeDesktopPackageFamilyName,
+            PackageFullName = "Claude_1.10628.2.0_x64__pzs8sxrjxfjjc",
+            RawXmlSha256 = "claude-xml-" + id
+        }.WithSanitizedTextLines(["Claude", text]);
     }
 }

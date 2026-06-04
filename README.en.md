@@ -2,20 +2,20 @@
 
 [中文](README.md) | [GitHub Release](https://github.com/Suochen/codex-notification-booster/releases/tag/v0.1.0)
 
-Make Codex completion notifications noticeable, especially when music is playing.
+Make Codex and Claude Desktop notifications noticeable, especially when music is playing.
 
-Codex Notification Booster is a Windows 11 tray helper for Codex users.
+Codex Notification Booster is a Windows 11 tray helper for Codex and Claude Desktop users.
 
-It solves a small but annoying problem: Codex can finish a task while you are focused on another window, listening to music, or watching something, and the normal Windows notification is easy to miss. Sometimes the built-in Windows notification sound is too quiet, covered by music, or does not play clearly.
+It solves a small but annoying problem: Codex or Claude Desktop can notify you while you are focused on another window, listening to music, or watching something, and the normal Windows notification is easy to miss. Sometimes the built-in Windows notification sound is too quiet, covered by music, or does not play clearly.
 
-This helper watches the Windows notification center for Codex notifications. When it sees a new Codex notification, it plays its own clearer sound and can briefly lower other app audio while the sound plays.
+This helper watches the Windows notification center for Codex and Claude Desktop notifications. When it sees a new target app notification, it plays its own clearer sound and can briefly lower other app audio while the sound plays.
 
-The goal is narrow: make Codex notifications easier to hear. It does not raise Codex's app volume and does not change the Windows master volume.
+The goal is narrow: make Codex and Claude Desktop notifications easier to hear. It does not raise the target app's volume and does not change the Windows master volume.
 
 ### Features
 
-- Watches for Codex Windows notifications.
-- Plays an extra sound when a Codex notification appears.
+- Watches for Codex and Claude Desktop Windows notifications.
+- Plays an extra sound when a target app notification appears.
 - Optional audio ducking: briefly lowers other app audio while the helper sound plays.
 - Runs in the system tray with no main window.
 - Chinese tray menu.
@@ -30,13 +30,13 @@ The goal is narrow: make Codex notifications easier to hear. It does not raise C
 
 1. Download `CodexNotificationBooster-win-x64.zip` from GitHub Releases.
 2. Unzip the whole archive.
-3. Open Codex settings and set `Turn completion notifications` to `Always`.
+3. Open Codex settings and set `Turn completion notifications` to `Always`; Claude Desktop can use normal system notifications.
 4. Open the `win-x64` folder.
 5. Double-click `CodexNotificationBooster.exe`.
 6. The app appears in the Windows system tray.
 7. Right-click the tray icon to open the menu.
 
-On first run, Windows may ask for notification access. This permission is used to identify Codex notifications. The app does not clear, reply to, modify, or upload notification content.
+On first run, Windows may ask for notification access. This permission is used to identify Codex and Claude Desktop notifications. The app does not clear, reply to, modify, or upload notification content.
 
 ### Current Status
 
@@ -49,22 +49,22 @@ On first run, Windows may ask for notification access. This permission is used t
 
 ### How It Works
 
-The helper does not monitor the Codex process. It listens to toast notifications exposed by the Windows notification center.
+The helper does not monitor the Codex or Claude Desktop process. It listens to toast notifications exposed by the Windows notification center.
 
 Flow:
 
 1. A Windows notification appears.
 2. The helper reads the notification metadata exposed by Windows.
-3. If the notification is identified as a Codex notification, the helper plays its own sound.
+3. If the notification is identified as a Codex or Claude Desktop notification, the helper plays its own sound.
 4. If audio ducking is enabled, the helper briefly lowers other readable playback sessions before restoring them.
 
-This means the app can work on another Windows 11 machine as long as Codex sends normal Windows notifications there and Windows grants notification access to the helper.
+This means the app can work on another Windows 11 machine as long as Codex or Claude Desktop sends normal Windows notifications there and Windows grants notification access to the helper.
 
 ### Tray Menu
 
 The tray menu labels are currently Chinese:
 
-- `已启用` / `已暂停`: enable or pause Codex notification boosting.
+- `已启用` / `已暂停`: enable or pause target app notification boosting.
 - `音频闪避：开` / `音频闪避：关`: turn audio ducking on or off.
 - `开机自启动：开` / `开机自启动：关`: enable or disable startup for the current Windows user.
 - `测试提示音`: play the built-in test sound.
@@ -88,7 +88,7 @@ When startup is disabled, the app removes its own `CodexNotificationBooster` sta
 
 ### Audio Behavior
 
-The helper plays its own notification sound. It does not turn up Codex itself.
+The helper plays its own notification sound. It does not turn up the target app itself.
 
 When audio ducking is enabled:
 
@@ -109,7 +109,7 @@ Logs are stored locally:
 %LOCALAPPDATA%\CodexNotificationBooster\logs
 ```
 
-Logs help troubleshoot startup, notification access, Codex matching, sound playback, audio ducking, restore behavior, and recoverable errors.
+Logs help troubleshoot startup, notification access, target app matching, sound playback, audio ducking, restore behavior, and recoverable errors.
 
 Normal tray logs do not record raw notification title, body, text lines, or raw XML. Do not upload local logs to GitHub unless you have checked them for sensitive information.
 
@@ -120,11 +120,11 @@ Copy the whole `win-x64` folder, not just the exe.
 Target machine requirements:
 
 1. Windows 11 x64.
-2. Codex for Windows can send notifications.
+2. Codex or Claude Desktop for Windows can send notifications.
 3. Notification access is granted to this helper.
-4. Codex notifications appear in Windows notification center.
+4. The corresponding notifications appear in Windows notification center.
 
-If Codex uses a different app identity on another machine, the helper may not recognize it. Check the local logs for app identity fields before changing matching rules.
+If a target app uses a different app identity on another machine, the helper may not recognize it. Check the local logs for app identity fields before changing matching rules.
 
 ### GitHub Release Zip
 
@@ -164,7 +164,7 @@ Check in this order:
 1. Right-click the tray icon and click `测试提示音`.
 2. Make sure Windows master volume is not muted.
 3. Make sure this helper is not muted in the volume mixer.
-4. Make sure Codex notifications appear in Windows notification center.
+4. Make sure Codex or Claude Desktop notifications appear in Windows notification center.
 5. Open the log directory and check for notification access or playback errors.
 
 #### "Notification Listener Temporarily Unavailable"
@@ -180,7 +180,7 @@ Try:
 
 #### Windows Notification Sound Is Hard To Hear While Music Is Playing
 
-That is the main reason this helper exists. Windows toast sound can be unclear or unreliable while other audio is playing. This helper plays its own sound and can briefly lower other app volume so Codex completion is easier to notice.
+That is the main reason this helper exists. Windows toast sound can be unclear or unreliable while other audio is playing. This helper plays its own sound and can briefly lower other app volume so target app notifications are easier to notice.
 
 ### Build From Source
 
@@ -225,7 +225,7 @@ Suggested Windows portable smoke test:
 3. Confirm the tray icon appears.
 4. Right-click the tray icon and click `测试提示音`.
 5. Toggle startup on and off from the tray menu, and confirm the startup entry is removed when off.
-6. Trigger a Codex notification.
+6. Trigger a Codex or Claude Desktop notification.
 7. Confirm the helper sound plays once and does not loop.
 8. Check logs are not repeatedly writing `listener-poll-failed`.
 
@@ -237,7 +237,7 @@ Current version does not:
 - Enable startup by default.
 - Write installer uninstall metadata.
 - Change Windows master volume.
-- Raise Codex app volume.
+- Raise target app volume.
 - Clear or modify notifications.
 - Upload logs.
 

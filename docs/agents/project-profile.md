@@ -1,6 +1,6 @@
 # Project Profile
 
-This profile keeps project-specific facts separate from the reusable Matt AI Workflow pack.
+This profile keeps project-specific facts for this repository.
 
 ## Project
 
@@ -15,16 +15,11 @@ This profile keeps project-specific facts separate from the reusable Matt AI Wor
 | Purpose | Repository | Default branch | Local path | Notes |
 | --- | --- | --- | --- | --- |
 | Primary application | `Suochen/codex-notification-booster` | `main` | `/home/shuhari/code/codex-notification-booster` | Windows 11 helper source. WSL is the editing workspace, not the target runtime. |
-| Workflow/config | `Suochen/matt-ai-workflow` | `main` | `/home/shuhari/code/ai/matt-ai-workflow` | Standalone workflow pack. Do not copy the whole pack into this repo. |
-
 ## Issue Tracker
 
-- System: GitHub Issues
+- System: GitHub Issues, only when requested by the user.
 - Project or repository: `Suochen/codex-notification-booster`
-- Labels: see `docs/agents/triage-labels.md`
-- Triage entry point: GitHub issue with Matt triage state label
-- PRD location: GitHub Issues with `prd` label
-- Issue handoff requirements: code/system-behavior changes require a Current Issue and Worker Final Report evidence before review
+- Code/system-behavior changes do not require a PRD, issue, or workflow gate by default.
 
 ## Worktree
 
@@ -32,8 +27,7 @@ This profile keeps project-specific facts separate from the reusable Matt AI Wor
 - Branch naming: `codex/<short-purpose>`
 - Parallel worktree path: not established yet
 - One-owner files or directories: none established yet
-- Read-only exploration rules: do not mutate the standalone workflow pack while working on this product repo
-- Cleanup expectations: do not remove user-created files or unreviewed GitHub issues
+- Cleanup expectations: do not remove user-created files or unrelated GitHub issues
 
 ## DB And Runtime
 
@@ -51,10 +45,9 @@ This profile keeps project-specific facts separate from the reusable Matt AI Wor
 
 | Scope | Command | When to use | Notes |
 | --- | --- | --- | --- |
-| Workflow template checks | `/home/shuhari/code/ai/matt-ai-workflow/scripts/workflow/check-template-fields.sh <file>` | When copying or adapting issue templates | Workflow pack command runs from WSL. |
-| PRD structure sample check | `/home/shuhari/code/ai/matt-ai-workflow/scripts/workflow/check-prd-structure.sh <file>` | When validating PRD-shaped markdown | Use for local drafts before publishing when practical. |
 | Windows notification API smoke | Windows PowerShell command that loads `Windows.UI.Notifications.Management.UserNotificationListener` | When checking API availability and listener permission | Must run on Windows, not inside Linux-only PowerShell. |
-| Product build | TBD | After a Windows-native project scaffold exists | Current machine has .NET runtime but no .NET SDK. |
+| Product build | `dotnet build CodexNotificationBooster.sln` | Before committing code changes when .NET SDK is available | Run from Windows PowerShell. |
+| Product tests | `dotnet test tests\CodexNotificationBooster.Core.Tests\CodexNotificationBooster.Core.Tests.csproj` | Before committing core behavior changes when .NET SDK is available | Run from Windows PowerShell. |
 
 ## Domain Risk Domains
 

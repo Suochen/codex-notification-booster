@@ -1,6 +1,6 @@
-# Issue tracker: GitHub
+# Optional Issue Tracker: GitHub
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Use GitHub Issues only when the user explicitly asks to create, update, or inspect issues.
 
 ## Repository
 
@@ -19,10 +19,10 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 Infer the repo from `git remote -v` when possible; `gh` does this automatically when run inside a clone.
 
-## When a skill says "publish to the issue tracker"
+## Optional Publishing
 
 Create a GitHub issue.
 
-## When a skill says "fetch the relevant ticket"
+## Optional Fetch
 
 Run `gh issue view <number> --comments`.

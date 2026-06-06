@@ -134,7 +134,7 @@ public sealed class NotificationListenerServiceTests : IDisposable
 
     private sealed class RecordingPlayback : INotificationPlayback
     {
-        public void Play(NotificationRecord record)
+        public void Play(NotificationRecord record, NotificationMatchDecision matchDecision)
         {
         }
     }

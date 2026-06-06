@@ -20,8 +20,9 @@ The goal is narrow: make Codex and Claude Desktop notifications easier to hear. 
 - Runs in the system tray with no main window.
 - Chinese tray menu.
 - Pause or resume notification boosting.
+- Enable or disable Codex / Claude Desktop alerts independently.
 - Optional startup on Windows login.
-- Test the helper sound from the tray menu.
+- Test Codex / Claude Desktop helper sounds separately from the tray menu.
 - Manually restore audio volume from the tray menu.
 - Local logs for troubleshooting.
 - Portable zip release: unzip and run.
@@ -44,7 +45,7 @@ On first run, Windows may ask for notification access. This permission is used t
 - Supported system: Windows 11 x64.
 - No installer, Start Menu entry, or background service.
 - Optional startup on Windows login, off by default, enabled manually from the tray menu.
-- No sound picker yet; the app uses one built-in notification sound.
+- No sound picker yet; Codex and Claude Desktop use separate built-in sounds.
 - WSL is only used for development and builds, not for runtime.
 
 ### How It Works
@@ -55,7 +56,7 @@ Flow:
 
 1. A Windows notification appears.
 2. The helper reads the notification metadata exposed by Windows.
-3. If the notification is identified as a Codex or Claude Desktop notification, the helper plays its own sound.
+3. If the notification is identified as a Codex or Claude Desktop notification and that app is enabled in the tray menu, the helper plays that app's sound.
 4. If audio ducking is enabled, the helper briefly lowers other readable playback sessions before restoring them.
 
 This means the app can work on another Windows 11 machine as long as Codex or Claude Desktop sends normal Windows notifications there and Windows grants notification access to the helper.
@@ -65,9 +66,12 @@ This means the app can work on another Windows 11 machine as long as Codex or Cl
 The tray menu labels are currently Chinese:
 
 - `已启用` / `已暂停`: enable or pause target app notification boosting.
+- `Codex 提醒：开` / `Codex 提醒：关`: enable or disable Codex notification sound.
+- `Claude Desktop 提醒：开` / `Claude Desktop 提醒：关`: enable or disable Claude Desktop notification sound.
 - `音频闪避：开` / `音频闪避：关`: turn audio ducking on or off.
 - `开机自启动：开` / `开机自启动：关`: enable or disable startup for the current Windows user.
-- `测试提示音`: play the built-in test sound.
+- `测试 Codex 提示音`: play the built-in Codex sound.
+- `测试 Claude 提示音`: play the built-in Claude Desktop sound.
 - `恢复音量`: try to restore ducked audio volume.
 - `打开日志目录`: open the local log directory.
 - `退出`: quit the app.
@@ -161,7 +165,7 @@ Codex Notification Booster
 
 Check in this order:
 
-1. Right-click the tray icon and click `测试提示音`.
+1. Right-click the tray icon and click `测试 Codex 提示音` or `测试 Claude 提示音`.
 2. Make sure Windows master volume is not muted.
 3. Make sure this helper is not muted in the volume mixer.
 4. Make sure Codex or Claude Desktop notifications appear in Windows notification center.
@@ -223,11 +227,12 @@ Suggested Windows portable smoke test:
 1. Publish the portable build.
 2. Start `CodexNotificationBooster.exe`.
 3. Confirm the tray icon appears.
-4. Right-click the tray icon and click `测试提示音`.
+4. Right-click the tray icon and click `测试 Codex 提示音` and `测试 Claude 提示音`.
 5. Toggle startup on and off from the tray menu, and confirm the startup entry is removed when off.
-6. Trigger a Codex or Claude Desktop notification.
-7. Confirm the helper sound plays once and does not loop.
-8. Check logs are not repeatedly writing `listener-poll-failed`.
+6. Toggle `Codex 提醒` and `Claude Desktop 提醒`, and confirm disabled apps do not play helper sounds.
+7. Trigger a Codex or Claude Desktop notification.
+8. Confirm the matching helper sound plays once and does not loop.
+9. Check logs are not repeatedly writing `listener-poll-failed`.
 
 ### Project Boundaries
 
@@ -241,4 +246,4 @@ Current version does not:
 - Clear or modify notifications.
 - Upload logs.
 
-Future installer, single-file release, sound picker, or more complex notification matching work should be handled in separate issues or PRDs.
+Future installer, single-file release, sound picker, or more complex notification matching work can be planned separately.

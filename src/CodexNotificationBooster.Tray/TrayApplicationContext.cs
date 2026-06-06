@@ -20,9 +20,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly CancellationTokenSource _shutdownTokenSource = new();
     private readonly NotifyIcon _notifyIcon;
     private readonly ToolStripMenuItem _enabledMenuItem;
+    private readonly ToolStripMenuItem _codexEnabledMenuItem;
+    private readonly ToolStripMenuItem _claudeDesktopEnabledMenuItem;
     private readonly ToolStripMenuItem _audioDuckingMenuItem;
     private readonly ToolStripMenuItem _startupMenuItem;
-    private readonly ToolStripMenuItem _testSoundMenuItem;
+    private readonly ToolStripMenuItem _testCodexSoundMenuItem;
+    private readonly ToolStripMenuItem _testClaudeDesktopSoundMenuItem;
     private readonly ToolStripMenuItem _restoreVolumeMenuItem;
     private readonly ToolStripMenuItem _openLogsMenuItem;
     private readonly ToolStripMenuItem _exitMenuItem;
@@ -52,19 +55,22 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 _audioDuckingCoordinator),
             new VisibleNotificationProcessor(),
             _logger,
-            () => _state.IsEnabled,
+            IsPlaybackEnabled,
             (title, message) => PostToUi(() => ShowStatusBalloon(title, message)));
 
         _paths.EnsureDirectories();
-        _soundAssetProvider.EnsurePresent();
+        _soundAssetProvider.EnsureAllPresent();
         _logger.ApplyRetention();
         _startupEntryManager.RefreshIfEnabled();
         _logger.Log(LogLevel.Info, "tray-started", "Tray helper shell started.");
 
         _enabledMenuItem = new ToolStripMenuItem();
+        _codexEnabledMenuItem = new ToolStripMenuItem();
+        _claudeDesktopEnabledMenuItem = new ToolStripMenuItem();
         _audioDuckingMenuItem = new ToolStripMenuItem();
         _startupMenuItem = new ToolStripMenuItem();
-        _testSoundMenuItem = new ToolStripMenuItem("测试提示音", null, (_, _) => RunMenuAction("test-sound-menu", TestSound));
+        _testCodexSoundMenuItem = new ToolStripMenuItem("测试 Codex 提示音", null, (_, _) => RunMenuAction("test-codex-sound-menu", () => TestSound(TargetNotificationApp.Codex)));
+        _testClaudeDesktopSoundMenuItem = new ToolStripMenuItem("测试 Claude 提示音", null, (_, _) => RunMenuAction("test-claude-desktop-sound-menu", () => TestSound(TargetNotificationApp.ClaudeDesktop)));
         _restoreVolumeMenuItem = new ToolStripMenuItem("恢复音量", null, (_, _) => RunMenuAction("restore-volume-menu", RestoreVolume));
         _openLogsMenuItem = new ToolStripMenuItem("打开日志目录", null, (_, _) => RunMenuAction("open-logs-menu", OpenLogsDirectory));
         _exitMenuItem = new ToolStripMenuItem("退出", null, (_, _) => ExitRequested());
@@ -80,10 +86,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.ContextMenuStrip.Items.AddRange(
         [
             _enabledMenuItem,
+            _codexEnabledMenuItem,
+            _claudeDesktopEnabledMenuItem,
             _audioDuckingMenuItem,
             _startupMenuItem,
             new ToolStripSeparator(),
-            _testSoundMenuItem,
+            _testCodexSoundMenuItem,
+            _testClaudeDesktopSoundMenuItem,
             _restoreVolumeMenuItem,
             _openLogsMenuItem,
             new ToolStripSeparator(),
@@ -126,6 +135,20 @@ internal sealed class TrayApplicationContext : ApplicationContext
         RefreshMenuLabels();
     }
 
+    private void ToggleCodexEnabled()
+    {
+        _state = _state with { IsCodexEnabled = !_state.IsCodexEnabled };
+        PersistState("state-codex-enabled-toggled", $"Codex notification playback state changed to {_state.IsCodexEnabled}.");
+        RefreshMenuLabels();
+    }
+
+    private void ToggleClaudeDesktopEnabled()
+    {
+        _state = _state with { IsClaudeDesktopEnabled = !_state.IsClaudeDesktopEnabled };
+        PersistState("state-claude-desktop-enabled-toggled", $"Claude Desktop notification playback state changed to {_state.IsClaudeDesktopEnabled}.");
+        RefreshMenuLabels();
+    }
+
     private void ToggleAudioDucking()
     {
         _state = _state with { IsAudioDuckingEnabled = !_state.IsAudioDuckingEnabled };
@@ -156,15 +179,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
         RefreshMenuLabels();
     }
 
-    private void TestSound()
+    private void TestSound(TargetNotificationApp targetApp)
     {
-        var soundPath = _soundAssetProvider.EnsurePresent();
+        var soundPath = _soundAssetProvider.EnsurePresent(targetApp);
         using var player = new SoundPlayer(soundPath);
         player.Load();
         player.PlaySync();
 
-        _logger.Log(LogLevel.Info, "test-sound-played", "Tray menu test sound playback completed.");
-        ShowStatusBalloon("Codex Notification Booster", "测试提示音已播放。");
+        var appName = targetApp == TargetNotificationApp.Codex ? "Codex" : "Claude Desktop";
+        _logger.Log(LogLevel.Info, "test-sound-played", "Tray menu test sound playback completed.", new Dictionary<string, object?>
+        {
+            ["targetApp"] = targetApp.ToString()
+        });
+        ShowStatusBalloon("Codex Notification Booster", $"{appName} 测试提示音已播放。");
     }
 
     private void RestoreVolume()
@@ -211,6 +238,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _logger.Log(LogLevel.Info, eventCode, message, new Dictionary<string, object?>
         {
             ["isEnabled"] = _state.IsEnabled,
+            ["isCodexEnabled"] = _state.IsCodexEnabled,
+            ["isClaudeDesktopEnabled"] = _state.IsClaudeDesktopEnabled,
             ["isAudioDuckingEnabled"] = _state.IsAudioDuckingEnabled
         });
     }
@@ -233,18 +262,43 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void RefreshMenuLabels()
     {
         _enabledMenuItem.Text = _state.IsEnabled ? "已启用" : "已暂停";
+        _codexEnabledMenuItem.Text = _state.IsCodexEnabled ? "Codex 提醒：开" : "Codex 提醒：关";
+        _claudeDesktopEnabledMenuItem.Text = _state.IsClaudeDesktopEnabled ? "Claude Desktop 提醒：开" : "Claude Desktop 提醒：关";
         _audioDuckingMenuItem.Text = _state.IsAudioDuckingEnabled ? "音频闪避：开" : "音频闪避：关";
         _startupMenuItem.Text = _startupEntryManager.IsEnabled() ? "开机自启动：开" : "开机自启动：关";
 
         _enabledMenuItem.Click -= EnabledMenuClicked;
+        _codexEnabledMenuItem.Click -= CodexEnabledMenuClicked;
+        _claudeDesktopEnabledMenuItem.Click -= ClaudeDesktopEnabledMenuClicked;
         _audioDuckingMenuItem.Click -= AudioDuckingMenuClicked;
         _startupMenuItem.Click -= StartupMenuClicked;
         _enabledMenuItem.Click += EnabledMenuClicked;
+        _codexEnabledMenuItem.Click += CodexEnabledMenuClicked;
+        _claudeDesktopEnabledMenuItem.Click += ClaudeDesktopEnabledMenuClicked;
         _audioDuckingMenuItem.Click += AudioDuckingMenuClicked;
         _startupMenuItem.Click += StartupMenuClicked;
     }
 
+    private bool IsPlaybackEnabled(NotificationMatchDecision decision)
+    {
+        if (!_state.IsEnabled)
+        {
+            return false;
+        }
+
+        return decision.TargetApp switch
+        {
+            TargetNotificationApp.Codex => _state.IsCodexEnabled,
+            TargetNotificationApp.ClaudeDesktop => _state.IsClaudeDesktopEnabled,
+            _ => false
+        };
+    }
+
     private void EnabledMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-enabled-menu", ToggleEnabled);
+
+    private void CodexEnabledMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-codex-enabled-menu", ToggleCodexEnabled);
+
+    private void ClaudeDesktopEnabledMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-claude-desktop-enabled-menu", ToggleClaudeDesktopEnabled);
 
     private void AudioDuckingMenuClicked(object? sender, EventArgs e) => RunMenuAction("toggle-audio-ducking-menu", ToggleAudioDucking);
 

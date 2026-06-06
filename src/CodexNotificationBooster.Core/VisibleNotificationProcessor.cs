@@ -16,7 +16,21 @@ public sealed class VisibleNotificationProcessor
         bool isEnabled,
         Action<NotificationRecord> playbackInvoker)
     {
+        ArgumentNullException.ThrowIfNull(playbackInvoker);
+
+        return Process(
+            visibleNotifications,
+            _ => isEnabled,
+            (record, _) => playbackInvoker(record));
+    }
+
+    public NotificationPollResult Process(
+        IEnumerable<NotificationRecord> visibleNotifications,
+        Func<NotificationMatchDecision, bool> isPlaybackEnabled,
+        Action<NotificationRecord, NotificationMatchDecision> playbackInvoker)
+    {
         ArgumentNullException.ThrowIfNull(visibleNotifications);
+        ArgumentNullException.ThrowIfNull(isPlaybackEnabled);
         ArgumentNullException.ThrowIfNull(playbackInvoker);
 
         var preparedRecords = PrepareVisibleRecords(visibleNotifications);
@@ -59,7 +73,8 @@ public sealed class VisibleNotificationProcessor
                 var helperDecision = new NotificationMatchDecision(
                     Matched: false,
                     Reason: "notification is owned by this helper",
-                    MatchedRule: "helper-owned-notification");
+                    MatchedRule: "helper-owned-notification",
+                    TargetApp: TargetNotificationApp.None);
                 var helperResult = NotificationPlaybackResult.Ignored(helperDecision) with
                 {
                     DiagnosticCode = "ignored-helper-owned-notification",
@@ -87,21 +102,21 @@ public sealed class VisibleNotificationProcessor
                 ignored += 1;
                 result = NotificationPlaybackResult.Ignored(matchDecision);
             }
-            else if (!isEnabled)
+            else if (!isPlaybackEnabled(matchDecision))
             {
                 ignored += 1;
                 result = new NotificationPlaybackResult(
                     Status: "ignored",
                     PlaybackRequested: false,
                     DiagnosticCode: "playback-paused",
-                    DiagnosticMessage: "Matched target notification while helper playback was paused.",
+                    DiagnosticMessage: "Matched target notification while helper playback was disabled.",
                     MatchDecision: matchDecision);
             }
             else
             {
                 try
                 {
-                    playbackInvoker(entry.Record);
+                    playbackInvoker(entry.Record, matchDecision);
                     playbackRequests += 1;
                     result = NotificationPlaybackResult.Played(matchDecision);
                 }

@@ -45,6 +45,30 @@ public sealed class VisibleNotificationProcessorTests
     }
 
     [Fact]
+    public void CodexAndClaudeDesktopPlaybackCanBeDisabledIndependently()
+    {
+        var processor = new VisibleNotificationProcessor();
+        var played = new List<NotificationRecord>();
+
+        processor.Process([], _ => true, (record, _) => played.Add(record));
+        var result = processor.Process(
+            [
+                CodexNotification(1, "task complete"),
+                ClaudeDesktopNotification(2, "message ready")
+            ],
+            decision => decision.TargetApp == TargetNotificationApp.Codex,
+            (record, _) => played.Add(record));
+
+        var playedRecord = Assert.Single(played);
+        Assert.Equal("Codex", playedRecord.AppDisplayName);
+        Assert.Equal(2, result.Matched);
+        Assert.Equal(1, result.PlaybackRequests);
+        Assert.Equal(1, result.Ignored);
+        Assert.Contains(result.Events, item => item.PlaybackResult?.MatchDecision.TargetApp == TargetNotificationApp.ClaudeDesktop &&
+                                               item.Code == "playback-paused");
+    }
+
+    [Fact]
     public void StillVisibleNotificationDoesNotReplayOnEveryPoll()
     {
         var processor = new VisibleNotificationProcessor();

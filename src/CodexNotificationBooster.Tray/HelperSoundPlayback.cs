@@ -12,9 +12,9 @@ internal sealed class HelperSoundPlayback : INotificationPlayback
         _soundAssetProvider = soundAssetProvider ?? throw new ArgumentNullException(nameof(soundAssetProvider));
     }
 
-    public void Play(NotificationRecord record)
+    public void Play(NotificationRecord record, NotificationMatchDecision matchDecision)
     {
-        var soundPath = _soundAssetProvider.EnsurePresent();
+        var soundPath = _soundAssetProvider.EnsurePresent(matchDecision.TargetApp);
         using var player = new SoundPlayer(soundPath);
         player.Load();
         player.PlaySync();

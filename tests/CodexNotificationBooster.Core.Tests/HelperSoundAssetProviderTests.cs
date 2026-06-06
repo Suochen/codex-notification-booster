@@ -47,6 +47,22 @@ public sealed class HelperSoundAssetProviderTests : IDisposable
         Assert.True(hasNonSilentSample);
     }
 
+    [Fact]
+    public void EnsurePresentUsesSeparateCodexSoundAndOriginalClaudeSound()
+    {
+        var paths = new AppPaths(_rootPath);
+        var provider = new HelperSoundAssetProvider(paths);
+
+        var codexPath = provider.EnsurePresent(TargetNotificationApp.Codex);
+        var claudePath = provider.EnsurePresent(TargetNotificationApp.ClaudeDesktop);
+
+        Assert.Equal(paths.CodexSoundPath, codexPath);
+        Assert.Equal(paths.HelperSoundPath, claudePath);
+        Assert.True(File.Exists(codexPath));
+        Assert.True(File.Exists(claudePath));
+        Assert.False(File.ReadAllBytes(codexPath).SequenceEqual(File.ReadAllBytes(claudePath)));
+    }
+
     private static int FindChunk(byte[] wavBytes, string chunkId)
     {
         for (var offset = 12; offset <= wavBytes.Length - 8;)

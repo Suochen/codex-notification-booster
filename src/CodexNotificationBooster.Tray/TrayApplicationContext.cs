@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.Media;
 using System.Windows.Forms;
 using CodexNotificationBooster.Core;
 
@@ -14,6 +13,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly RedactingFileLogger _logger;
     private readonly StartupEntryManager _startupEntryManager;
     private readonly AudioDuckingCoordinator _audioDuckingCoordinator;
+    private readonly INotificationPlayback _notificationPlayback;
     private readonly NotificationListenerService _notificationListenerService;
     private readonly System.Windows.Forms.Timer _pollTimer;
     private readonly System.Windows.Forms.Timer _duckingTimer;
@@ -48,11 +48,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
             SaveState,
             Process.GetCurrentProcess().Id,
             HandleAudioDuckingEvent);
+        _notificationPlayback = new AudioDuckingNotificationPlayback(
+            new HelperSoundPlayback(_soundAssetProvider),
+            _audioDuckingCoordinator);
         _notificationListenerService = new NotificationListenerService(
             new WindowsNotificationSource(_logger),
-            new AudioDuckingNotificationPlayback(
-                new HelperSoundPlayback(_soundAssetProvider),
-                _audioDuckingCoordinator),
+            _notificationPlayback,
             new VisibleNotificationProcessor(),
             _logger,
             IsPlaybackEnabled,
@@ -181,10 +182,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void TestSound(TargetNotificationApp targetApp)
     {
-        var soundPath = _soundAssetProvider.EnsurePresent(targetApp);
-        using var player = new SoundPlayer(soundPath);
-        player.Load();
-        player.PlaySync();
+        _notificationPlayback.Play(CreateTestNotificationRecord(targetApp), CreateTestMatchDecision(targetApp));
 
         var appName = targetApp == TargetNotificationApp.Codex ? "Codex" : "Claude Desktop";
         _logger.Log(LogLevel.Info, "test-sound-played", "Tray menu test sound playback completed.", new Dictionary<string, object?>
@@ -192,6 +190,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ["targetApp"] = targetApp.ToString()
         });
         ShowStatusBalloon("Codex Notification Booster", $"{appName} 测试提示音已播放。");
+    }
+
+    private static NotificationRecord CreateTestNotificationRecord(TargetNotificationApp targetApp)
+    {
+        return new NotificationRecord
+        {
+            CapturedAt = DateTimeOffset.UtcNow,
+            AppDisplayName = targetApp == TargetNotificationApp.Codex ? "Codex" : "Claude Desktop"
+        };
+    }
+
+    private static NotificationMatchDecision CreateTestMatchDecision(TargetNotificationApp targetApp)
+    {
+        return new NotificationMatchDecision(
+            Matched: true,
+            Reason: "tray menu test sound playback",
+            MatchedRule: "tray-test-sound",
+            TargetApp: targetApp);
     }
 
     private void RestoreVolume()

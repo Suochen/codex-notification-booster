@@ -15,6 +15,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly AudioDuckingCoordinator _audioDuckingCoordinator;
     private readonly INotificationPlayback _notificationPlayback;
     private readonly NotificationListenerService _notificationListenerService;
+    private readonly ManualPlaybackTrigger _manualPlaybackTrigger;
+    private readonly TriggerFileWatcher _triggerFileWatcher;
     private readonly System.Windows.Forms.Timer _pollTimer;
     private readonly System.Windows.Forms.Timer _duckingTimer;
     private readonly CancellationTokenSource _shutdownTokenSource = new();
@@ -124,6 +126,18 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
         _duckingTimer.Tick += (_, _) => _audioDuckingCoordinator.RestoreIfDue();
         _duckingTimer.Start();
+
+        _manualPlaybackTrigger = new ManualPlaybackTrigger(
+            _notificationPlayback,
+            IsPlaybackEnabled,
+            (level, code, message, metadata) => _logger.Log(level, code, message, metadata));
+        _triggerFileWatcher = new TriggerFileWatcher(
+            _paths.TriggerFilePath,
+            source => PostToUi(() => _manualPlaybackTrigger.Fire(source)));
+        _logger.Log(LogLevel.Info, "manual-trigger-watching", "Watching foreground trigger file.", new Dictionary<string, object?>
+        {
+            ["triggerFile"] = _paths.TriggerFilePath
+        });
 
         _audioDuckingCoordinator.RecoverPriorState();
         _ = PollNotificationsAsync();
@@ -237,6 +251,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _logger.Log(LogLevel.Info, "tray-exit", "Tray helper exiting normally.");
             _audioDuckingCoordinator.RestoreNow();
             _shutdownTokenSource.Cancel();
+            _triggerFileWatcher.Dispose();
             _pollTimer.Stop();
             _duckingTimer.Stop();
             _pollTimer.Dispose();

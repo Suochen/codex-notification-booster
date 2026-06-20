@@ -16,6 +16,7 @@ public sealed class AppPaths
         HelperSoundPath = Path.Combine(AssetsDirectory, "helper-notification.wav");
         CodexSoundPath = Path.Combine(AssetsDirectory, "codex-notification.wav");
         ClaudeDesktopSoundPath = HelperSoundPath;
+        TriggerFilePath = Path.Combine(rootDirectory, "trigger.signal");
     }
 
     public string RootDirectory { get; }
@@ -31,6 +32,8 @@ public sealed class AppPaths
     public string CodexSoundPath { get; }
 
     public string ClaudeDesktopSoundPath { get; }
+
+    public string TriggerFilePath { get; }
 
     public static AppPaths CreateDefault()
     {

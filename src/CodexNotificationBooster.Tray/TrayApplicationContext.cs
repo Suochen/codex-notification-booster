@@ -127,9 +127,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _duckingTimer.Tick += (_, _) => _audioDuckingCoordinator.RestoreIfDue();
         _duckingTimer.Start();
 
+        // 前台 hook 触发只认主开关 IsEnabled，刻意不受 per-app 的 IsClaudeDesktopEnabled 影响：
+        // 后者用来单独关掉「桌面版 toast 监听」这条通道，而 hook 通知器要独立保留。
+        // （原先共用 IsPlaybackEnabled，导致关 toast 会连带把 hook 一起关哑。）
         _manualPlaybackTrigger = new ManualPlaybackTrigger(
             _notificationPlayback,
-            IsPlaybackEnabled,
+            _ => _state.IsEnabled,
             (level, code, message, metadata) => _logger.Log(level, code, message, metadata));
         _triggerFileWatcher = new TriggerFileWatcher(
             _paths.TriggerFilePath,

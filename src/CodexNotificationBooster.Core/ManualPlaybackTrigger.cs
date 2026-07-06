@@ -16,7 +16,10 @@ namespace CodexNotificationBooster.Core;
 /// </summary>
 public sealed class ManualPlaybackTrigger
 {
-    public static readonly TimeSpan DefaultMinimumInterval = TimeSpan.FromMilliseconds(750);
+    // 2000ms（原 750ms）：Play() 在 UI 线程同步阻塞约 0.6s，FileSystemWatcher 对一次写入抛的
+    // 第二个事件要等首播放完才被处理，此时约 0.6s 已过，正卡在 750ms 边界上漏过去 → 双响。
+    // 提到 2000ms 使窗口远大于播放时长，稳定吞掉重复事件；真实两次任务完成间隔以分钟计，不误伤。
+    public static readonly TimeSpan DefaultMinimumInterval = TimeSpan.FromMilliseconds(2000);
 
     private readonly INotificationPlayback _playback;
     private readonly Func<NotificationMatchDecision, bool> _isPlaybackEnabled;

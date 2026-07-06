@@ -23,7 +23,7 @@ public sealed record NotificationPlaybackResult(
             Status: "played",
             PlaybackRequested: true,
             DiagnosticCode: "matched-playback-requested",
-            DiagnosticMessage: "Matched Codex notification requested helper-owned playback.",
+            DiagnosticMessage: "Matched target notification requested helper-owned playback.",
             MatchDecision: decision);
     }
 

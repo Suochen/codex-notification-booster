@@ -4,8 +4,8 @@ Decides whether notification metadata should request helper-owned sound playback
 
 .DESCRIPTION
 This module consumes plain notification metadata and a playback configuration,
-reuses the Codex notification matcher, and requests playback only for matched
-Codex metadata. It does not call Windows notification APIs, change any volume
+reuses the notification matcher, and requests playback only for matched target
+app metadata. It does not call Windows notification APIs, change any volume
 setting, suppress notification audio, or mutate notification state.
 #>
 
@@ -167,7 +167,7 @@ function Invoke-NotificationPlaybackTrigger {
         -Status 'played' `
         -PlaybackRequested $true `
         -DiagnosticCode 'matched-playback-requested' `
-        -DiagnosticMessage 'Matched Codex notification requested helper-owned playback.' `
+        -DiagnosticMessage 'Matched target notification requested helper-owned playback.' `
         -SoundPath $configDecision.soundPath `
         -MatchDecision $matchDecision
 }

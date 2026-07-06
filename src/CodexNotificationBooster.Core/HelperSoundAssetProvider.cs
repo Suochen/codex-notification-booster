@@ -11,17 +11,72 @@ public sealed class HelperSoundAssetProvider
 
     public string EnsurePresent()
     {
-        _paths.EnsureDirectories();
-
-        if (!File.Exists(_paths.HelperSoundPath))
-        {
-            File.WriteAllBytes(_paths.HelperSoundPath, CreateThreeToneWavBytes());
-        }
-
-        return _paths.HelperSoundPath;
+        return EnsurePresent(TargetNotificationApp.ClaudeDesktop);
     }
 
-    private static byte[] CreateThreeToneWavBytes()
+    public string EnsurePresent(TargetNotificationApp targetApp)
+    {
+        _paths.EnsureDirectories();
+
+        var soundPath = GetSoundPath(targetApp);
+        if (!File.Exists(soundPath))
+        {
+            File.WriteAllBytes(soundPath, CreateWavBytes(targetApp));
+        }
+
+        return soundPath;
+    }
+
+    public void EnsureAllPresent()
+    {
+        EnsurePresent(TargetNotificationApp.Codex);
+        EnsurePresent(TargetNotificationApp.ClaudeDesktop);
+    }
+
+    private string GetSoundPath(TargetNotificationApp targetApp)
+    {
+        return targetApp switch
+        {
+            TargetNotificationApp.Codex => _paths.CodexSoundPath,
+            TargetNotificationApp.ClaudeDesktop => _paths.ClaudeDesktopSoundPath,
+            _ => _paths.ClaudeDesktopSoundPath
+        };
+    }
+
+    private static byte[] CreateWavBytes(TargetNotificationApp targetApp)
+    {
+        return targetApp switch
+        {
+            TargetNotificationApp.Codex => CreateDistinctPingWavBytes(),
+            _ => CreateOriginalThreeToneWavBytes()
+        };
+    }
+
+    private static byte[] CreateOriginalThreeToneWavBytes()
+    {
+        return CreateWavBytes(
+        [
+            new WavTone(880d, 0.12d, 1d, 0d, false),
+            new WavTone(0d, 0.05d, 0d, 0d, false),
+            new WavTone(1174.66d, 0.12d, 1d, 0d, false),
+            new WavTone(0d, 0.05d, 0d, 0d, false),
+            new WavTone(1567.98d, 0.18d, 1d, 0d, false)
+        ]);
+    }
+
+    private static byte[] CreateDistinctPingWavBytes()
+    {
+        return CreateWavBytes(
+        [
+            new WavTone(740d, 0.075d, 0.86d, 0.24d, true),
+            new WavTone(0d, 0.045d, 0d, 0d, false),
+            new WavTone(554.37d, 0.105d, 0.78d, 0.18d, true),
+            new WavTone(0d, 0.04d, 0d, 0d, false),
+            new WavTone(1108.73d, 0.20d, 0.70d, 0.22d, true)
+        ]);
+    }
+
+    private static byte[] CreateWavBytes(IReadOnlyList<WavTone> tones)
     {
         const int sampleRate = 16_000;
         const short bitsPerSample = 16;
@@ -30,15 +85,6 @@ public sealed class HelperSoundAssetProvider
         const short blockAlign = channels * bytesPerSample;
         const int byteRate = sampleRate * blockAlign;
         const short amplitude = 9_000;
-
-        var tones = new (double Frequency, double DurationSeconds)[]
-        {
-            (880d, 0.12d),
-            (0d, 0.05d),
-            (1174.66d, 0.12d),
-            (0d, 0.05d),
-            (1567.98d, 0.18d)
-        };
 
         var samples = new List<short>();
 
@@ -51,7 +97,10 @@ public sealed class HelperSoundAssetProvider
                 if (tone.Frequency > 0d)
                 {
                     var time = index / (double)sampleRate;
-                    value = (short)(Math.Sin(2d * Math.PI * tone.Frequency * time) * amplitude);
+                    var envelope = tone.UseEnvelope ? Envelope(index, sampleCount) : 1d;
+                    var fundamental = Math.Sin(2d * Math.PI * tone.Frequency * time);
+                    var shimmer = tone.HarmonicGain * Math.Sin(2d * Math.PI * tone.Frequency * 2d * time);
+                    value = (short)((fundamental + shimmer) / (1d + tone.HarmonicGain) * amplitude * tone.Gain * envelope);
                 }
 
                 samples.Add(value);
@@ -85,4 +134,28 @@ public sealed class HelperSoundAssetProvider
         writer.Flush();
         return stream.ToArray();
     }
+
+    private static double Envelope(int index, int sampleCount)
+    {
+        if (sampleCount <= 1)
+        {
+            return 1d;
+        }
+
+        var attack = Math.Max(1, (int)(sampleCount * 0.10d));
+        var release = Math.Max(1, (int)(sampleCount * 0.24d));
+        if (index < attack)
+        {
+            return index / (double)attack;
+        }
+
+        if (index > sampleCount - release)
+        {
+            return Math.Max(0d, (sampleCount - index) / (double)release);
+        }
+
+        return 1d;
+    }
+
+    private sealed record WavTone(double Frequency, double DurationSeconds, double Gain, double HarmonicGain, bool UseEnvelope);
 }

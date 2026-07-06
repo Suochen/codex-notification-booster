@@ -308,9 +308,9 @@ public sealed class AudioDuckingNotificationPlayback : INotificationPlayback
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
     }
 
-    public void Play(NotificationRecord record)
+    public void Play(NotificationRecord record, NotificationMatchDecision matchDecision)
     {
         _coordinator.DuckForNotificationPlayback();
-        _inner.Play(record);
+        _inner.Play(record, matchDecision);
     }
 }

@@ -7,7 +7,7 @@ public interface INotificationSource
 
 public interface INotificationPlayback
 {
-    void Play(NotificationRecord record);
+    void Play(NotificationRecord record, NotificationMatchDecision matchDecision);
 }
 
 public sealed class NotificationListenerService
@@ -16,7 +16,7 @@ public sealed class NotificationListenerService
     private readonly INotificationPlayback _playback;
     private readonly VisibleNotificationProcessor _processor;
     private readonly RedactingFileLogger _logger;
-    private readonly Func<bool> _isEnabledProvider;
+    private readonly Func<NotificationMatchDecision, bool> _isEnabledProvider;
     private readonly Action<string, string> _statusNotifier;
     private readonly Func<DateTimeOffset> _nowProvider;
     private readonly TimeSpan _statusNotificationCooldown;
@@ -28,6 +28,28 @@ public sealed class NotificationListenerService
         VisibleNotificationProcessor processor,
         RedactingFileLogger logger,
         Func<bool> isEnabledProvider,
+        Action<string, string> statusNotifier,
+        Func<DateTimeOffset>? nowProvider = null,
+        TimeSpan? statusNotificationCooldown = null)
+        : this(
+            source,
+            playback,
+            processor,
+            logger,
+            _ => isEnabledProvider(),
+            statusNotifier,
+            nowProvider,
+            statusNotificationCooldown)
+    {
+        ArgumentNullException.ThrowIfNull(isEnabledProvider);
+    }
+
+    public NotificationListenerService(
+        INotificationSource source,
+        INotificationPlayback playback,
+        VisibleNotificationProcessor processor,
+        RedactingFileLogger logger,
+        Func<NotificationMatchDecision, bool> isEnabledProvider,
         Action<string, string> statusNotifier,
         Func<DateTimeOffset>? nowProvider = null,
         TimeSpan? statusNotificationCooldown = null)
@@ -47,7 +69,7 @@ public sealed class NotificationListenerService
         try
         {
             var records = await _source.GetVisibleNotificationsAsync(cancellationToken).ConfigureAwait(false);
-            var result = _processor.Process(records, _isEnabledProvider(), record => _playback.Play(record));
+            var result = _processor.Process(records, _isEnabledProvider, (record, decision) => _playback.Play(record, decision));
 
             foreach (var item in result.Events)
             {
@@ -96,7 +118,8 @@ public sealed class NotificationListenerService
             ["status"] = item.PlaybackResult?.Status,
             ["playbackRequested"] = item.PlaybackResult?.PlaybackRequested,
             ["matched"] = item.PlaybackResult?.MatchDecision.Matched,
-            ["matchedRule"] = item.PlaybackResult?.MatchDecision.MatchedRule
+            ["matchedRule"] = item.PlaybackResult?.MatchDecision.MatchedRule,
+            ["targetApp"] = item.PlaybackResult?.MatchDecision.TargetApp.ToString()
         };
 
         _logger.Log(item.Level, item.Code, item.Message, metadata);

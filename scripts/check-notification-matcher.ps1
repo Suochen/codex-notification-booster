@@ -51,6 +51,7 @@ function Assert-Decision {
 
 Assert-Decision -FixtureName 'codex-general.json' -ExpectedMatched $true
 Assert-Decision -FixtureName 'codex-no-completion-text.json' -ExpectedMatched $true
+Assert-Decision -FixtureName 'claude-desktop.json' -ExpectedMatched $true
 Assert-Decision -FixtureName 'qq.json' -ExpectedMatched $false
 Assert-Decision -FixtureName 'topnotify.json' -ExpectedMatched $false
 Assert-Decision -FixtureName 'edge.json' -ExpectedMatched $false

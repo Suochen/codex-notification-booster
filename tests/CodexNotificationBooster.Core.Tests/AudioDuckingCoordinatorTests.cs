@@ -177,6 +177,31 @@ public sealed class AudioDuckingCoordinatorTests
         Assert.Null(_state.AudioDucking);
     }
 
+    [Fact]
+    public void DuckingPlaybackDucksBeforeInnerPlayback()
+    {
+        var order = new List<string>();
+        var controller = new FakeAudioController
+        {
+            Sessions = [_music],
+            Volumes = { [_music.SessionId] = 0.8f },
+            AfterSet = (_, _) => order.Add("duck")
+        };
+        var coordinator = CreateCoordinator(controller);
+        var playback = new AudioDuckingNotificationPlayback(
+            new RecordingPlayback(() => order.Add("play")),
+            coordinator);
+
+        playback.Play(new NotificationRecord(), new NotificationMatchDecision(
+            Matched: true,
+            Reason: "test",
+            MatchedRule: "test",
+            TargetApp: TargetNotificationApp.Codex));
+
+        Assert.Equal(["duck", "play"], order);
+        Assert.Equal(AudioDuckingCoordinator.DuckVolume, controller.Volumes[_music.SessionId]);
+    }
+
     private AudioDuckingCoordinator CreateCoordinator(FakeAudioController controller)
     {
         return new AudioDuckingCoordinator(
@@ -197,6 +222,8 @@ public sealed class AudioDuckingCoordinatorTests
         public Dictionary<string, string> ReadFailures { get; } = new(StringComparer.Ordinal);
 
         public Dictionary<string, string> WriteFailures { get; } = new(StringComparer.Ordinal);
+
+        public Action<string, float>? AfterSet { get; init; }
 
         public IReadOnlyList<AudioSessionInfo> EnumeratePlaybackSessions()
         {
@@ -229,8 +256,24 @@ public sealed class AudioDuckingCoordinatorTests
             }
 
             Volumes[sessionId] = volume;
+            AfterSet?.Invoke(sessionId, volume);
             error = null;
             return true;
+        }
+    }
+
+    private sealed class RecordingPlayback : INotificationPlayback
+    {
+        private readonly Action _onPlay;
+
+        public RecordingPlayback(Action onPlay)
+        {
+            _onPlay = onPlay;
+        }
+
+        public void Play(NotificationRecord record, NotificationMatchDecision matchDecision)
+        {
+            _onPlay();
         }
     }
 }

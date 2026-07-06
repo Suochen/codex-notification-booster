@@ -96,7 +96,7 @@ try {
         -ExpectedDiagnosticCode 'matched-playback-requested'
 
     if ($calls.Count -ne 1) {
-        throw "Expected one fake playback call for Codex metadata, got $($calls.Count)."
+        throw "Expected one fake playback call for target app metadata, got $($calls.Count)."
     }
     if ($calls[0] -ne $wavPath) {
         throw "Expected fake playback sound path '$wavPath', got '$($calls[0])'."
